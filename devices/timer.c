@@ -97,7 +97,7 @@ timer_sleep (int64_t ticks) {
 	thread_sleep (); /* 🔥 Discard control while waiting */
 }
 
-/* Suspends execution for approximately MS milliseconds. */
+/* Suspends execution for approximately MS milliseconds.dd */
 void
 timer_msleep (int64_t ms) {
 	real_time_sleep (ms, 1000);
