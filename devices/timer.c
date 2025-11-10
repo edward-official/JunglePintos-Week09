@@ -87,13 +87,19 @@ timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
 }
 
-/* Suspends execution for approximately TICKS timer ticks. */
+/* TICKS만큼의 시간 동안 실행을 중단합니다. */
 void
 timer_sleep (int64_t ticks) {
+	/* 현재 tick에 TICKS를 더해 스레드가 깨어날 시간을 계산합니다. */
 	int64_t wakeup = timer_ticks () + ticks;
 	// ASSERT (intr_get_level () == INTR_ON); /* 🔥 Verify that the timer interrupt is working */
+	
+	/* 현재 실행 중인 스레드의 구조체에 깨어날 시간을 저장합니다. */
 	struct thread *current_thread = thread_current ();
 	current_thread->wakeup_tick = wakeup; /* 🔥 Set wakeup tick */
+
+	/* 스레드를 재우기 위해 thread_sleep 함수를 호출합니다.
+	   실제 스레드를 재우고 스케줄링하는 로직은 thread.c에 위임됩니다. */
 	thread_sleep (); /* 🔥 Discard control while waiting */
 }
 
@@ -121,11 +127,12 @@ timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
 
-/* Timer interrupt handler. */
+/* 타이머 인터럽트 핸들러. 매 틱마다 호출됩니다. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
+	/* 매 틱마다 잠자는 스레드들 중에서 깨워야 할 스레드가 있는지 확인합니다. */
 	thread_wake_up (ticks); /* 🔥 Modified */
 }
 

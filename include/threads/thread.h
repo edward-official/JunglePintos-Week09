@@ -90,11 +90,13 @@ struct thread {
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
-	int priority;                       /* Priority. */
-	int64_t wakeup_tick;                /* 🔥 Modified: possibly can lead to macro error */ /* #define list_entry(LIST_ELEM, STRUCT, MEMBER) */
+		int priority;                       /* Priority. */
+		/* 스레드가 깨어나야 할 시간(tick)을 저장합니다.
+		   timer_sleep()에 의해 설정되며, thread_wake_up()에서 사용됩니다. */
+		int64_t wakeup_tick;
 
-	/* Shared between thread.c and synch.c. */
-	struct list_elem elem;              /* List element. */
+		/* Shared between thread.c and synch.c. */
+		struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -135,6 +137,9 @@ void thread_exit (void) NO_RETURN;
 void thread_sleep (void); /* 🔥 Modified */
 void thread_wake_up (int64_t current_tick); /* 🔥 Modified */
 void thread_yield (void);
+bool thread_should_yield(void);
+
+bool thread_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
