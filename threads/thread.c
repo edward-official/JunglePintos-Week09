@@ -208,7 +208,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
-
+	check_preemption(); /* 🔥 Modify Here */
 	return tid;
 }
 
@@ -226,13 +226,16 @@ thread_block (void) {
 	schedule ();
 }
 
-bool
-thread_cmp_priority (const struct list_elem *a,
-                     const struct list_elem *b,
-                     void *aux UNUSED) {
+bool thread_cmp_priority_desc (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
   const struct thread *ta = list_entry (a, struct thread, elem);
   const struct thread *tb = list_entry (b, struct thread, elem);
   return ta->priority > tb->priority;
+}
+
+bool thread_cmp_priority_asc (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
+  const struct thread *ta = list_entry (a, struct thread, elem);
+  const struct thread *tb = list_entry (b, struct thread, elem);
+  return ta->priority < tb->priority;
 }
 
 /* Transitions a blocked thread T to the ready-to-run state.
@@ -251,7 +254,7 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_insert_ordered (&ready_list, &t->elem, thread_cmp_priority, NULL);
+	list_insert_ordered (&ready_list, &t->elem, thread_cmp_priority_desc, NULL); /* 🔥 Modified */
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -313,7 +316,7 @@ thread_yield (void) {
   ASSERT(!intr_context());  /* 🔥 Check if interrupt handler is currently operating */
 
 	old_level = intr_disable();  /* 🔥 Disable interrupt since we need to switch the context */
-  if (curr != idle_thread) list_insert_ordered (&ready_list, &curr->elem, thread_cmp_priority, NULL);
+  if (curr != idle_thread) list_insert_ordered (&ready_list, &curr->elem, thread_cmp_priority_desc, NULL);
   do_schedule(THREAD_READY); /* 🔥 Hand over the control to another thread */
   intr_set_level(old_level);  /* 🔥 Restore the interrupt level */
 }
@@ -369,11 +372,14 @@ thread_wake_up (int64_t current_tick) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	check_preemption(); /* 🔥 Modify Here */
+	/* If current thread got no longer prioritized, yield */
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) {
+	/* If donate given, return the donated priority */
 	return thread_current ()->priority;
 }
 
@@ -644,4 +650,16 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+void check_preemption(void) {
+	if (!list_empty(&ready_list)) {
+		struct thread *curr = thread_current();
+		struct list_elem *front_elem = list_front(&ready_list);
+		struct thread *front_thread = list_entry(front_elem, struct thread, elem);
+		if (front_thread->priority > curr->priority) {
+			if (intr_context()) intr_yield_on_return();
+			else thread_yield();
+		}
+	}
 }

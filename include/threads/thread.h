@@ -91,6 +91,7 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
+	int original_priority;              /* 🔥 Modified: priority before donation */
 	int64_t wakeup_tick;                /* 🔥 Modified: possibly can lead to macro error */ /* #define list_entry(LIST_ELEM, STRUCT, MEMBER) */
 
 	/* Shared between thread.c and synch.c. */
@@ -145,5 +146,9 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+void check_preemption(void); /* 🔥 Added */
+bool thread_cmp_priority_desc (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+bool thread_cmp_priority_asc (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 #endif /* threads/thread.h */

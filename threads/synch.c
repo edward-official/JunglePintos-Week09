@@ -109,10 +109,15 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
-		thread_unblock (list_entry (list_pop_front (&sema->waiters),
-					struct thread, elem));
+	if (!list_empty (&sema->waiters)) {
+		// thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem)); /* 🔥 Not popping the top-priority currently?? */
+		/* 🔥 Need to find a thread to wake from the waiting list: incomplete */
+		struct list_elem *t = list_max(&sema->waiters, thread_cmp_priority_asc, NULL);
+		list_remove(t);
+		thread_unblock(list_entry (t, struct thread, elem));
+	}
 	sema->value++;
+	check_preemption();
 	intr_set_level (old_level);
 }
 
@@ -282,7 +287,7 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_push_back (&cond->waiters, &waiter.elem);
+	list_push_back (&cond->waiters, &waiter.elem); /* 🔥 enlisted */
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
