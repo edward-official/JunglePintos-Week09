@@ -32,6 +32,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -57,7 +58,7 @@ sema_init (struct semaphore *sema, unsigned value) {
    interrupts disabled, but if it sleeps then the next scheduled
    thread will probably turn interrupts back on. This is
    sema_down function. */
-void
+void//lock을 획득, 자원을 소모, 대기 리스트에 우선순위에 따라 넣고 블락시킴, 자원 생길때까지 대기
 sema_down (struct semaphore *sema) {
 	enum intr_level old_level;
 
@@ -66,7 +67,12 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
-		list_push_back (&sema->waiters, &thread_current ()->elem);
+		/* [MODIFIED] PRIORITY SCHEDULING ON SEMAPHORE
+		 * 기존의 list_push_back은 스레드를 대기열의 맨 뒤에 추가하여 FIFO(선착순) 방식으로 동작한다.
+		 * 이를 list_insert_ordered로 변경하여, 대기하는 스레드들이 우선순위에 따라 정렬되도록 한다.
+		 * 이를 통해 sema_up에서 항상 가장 우선순위가 높은 스레드를 깨우게 되어,
+		 * priority-fifo 테스트를 통과 */
+		list_insert_ordered (&sema->waiters, &thread_current ()->elem, thread_cmp_priority, NULL);
 		thread_block ();
 	}
 	sema->value--;
@@ -102,7 +108,7 @@ sema_try_down (struct semaphore *sema) {
    and wakes up one thread of those waiting for SEMA, if any.
 
    This function may be called from an interrupt handler. */
-void
+void	//대기 리스트의 맨 앞을 깨우고, 우선순위 높으면 선점
 sema_up (struct semaphore *sema) {
 	enum intr_level old_level;
 
@@ -113,6 +119,14 @@ sema_up (struct semaphore *sema) {
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
 	sema->value++;
+
+	/* [MODIFIED] PREEMPTION BY PRIORITY
+	 * 세마포어를 반납(up)한 결과, 더 높은 우선순위의 스레드가 ready_list에 추가되었을 수 있다.
+	 * 이 경우, 새로 만든 헬퍼 함수를 호출하여 CPU를 양보해야 하는지 확인하고 양보한다. */
+	if (thread_should_yield()) {
+        thread_yield();
+    }
+
 	intr_set_level (old_level);
 }
 
@@ -243,7 +257,7 @@ struct semaphore_elem {
 };
 
 /* Initializes condition variable COND.  A condition variable
-   allows one piece of code to signal a condition and cooperating
+   allows one piece ofcode to signal a condition and cooperating
    code to receive the signal and act upon it. */
 void
 cond_init (struct condition *cond) {
@@ -281,10 +295,10 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	sema_init (&waiter.semaphore, 0);
-	list_push_back (&cond->waiters, &waiter.elem);
+	list_insert_ordered (&cond->waiters, &thread_current () -> elem, thread_cmp_priority, NULL);//우선순위대로 waiter에 넣는다
+	
 	lock_release (lock);
-	sema_down (&waiter.semaphore);
+	thread_block();
 	lock_acquire (lock);
 }
 
@@ -302,9 +316,10 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	if (!list_empty (&cond->waiters))
-		sema_up (&list_entry (list_pop_front (&cond->waiters),
-					struct semaphore_elem, elem)->semaphore);
+	if (!list_empty (&cond->waiters)){
+		struct thread *t = list_entry(list_pop_front(&cond->waiters), struct thread, elem);
+		thread_unblock(t);
+	}	
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
