@@ -209,6 +209,9 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
+	//NOTE : unblock 한 이후 rchange로 바꿔주기
+	rchange_priority();
+
 	return tid;
 }
 
@@ -326,7 +329,7 @@ is_left_time_earlier (const struct list_elem *a, const struct list_elem *b, void
   return ta->wakeup_tick < tb->wakeup_tick;
 }
 
-/* 🔥 Modified */
+//NOTE : thread_sleep
 void
 thread_sleep (void) {
 	/* 🔥 Previous action: timer_sleep (thread context)
@@ -369,6 +372,8 @@ thread_wake_up (int64_t current_tick) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	//NOTE : thread_set_priority에 우선순위 부여 후 바꿔주는 코드 추가
+	rchange_priority();
 }
 
 /* Returns the current thread's priority. */
@@ -644,4 +649,14 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+// //NOTE : 우선순위 비교해서 바꿔준다.
+void rchange_priority(void){
+	if(list_empty(&ready_list)) return;
+	struct thread *curr = thread_current();
+	struct thread *front_ready = list_entry(list_front(&ready_list), struct thread, elem);
+	if(curr->priority < front_ready->priority){
+		thread_yield();
+	}
 }
