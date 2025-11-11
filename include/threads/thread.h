@@ -9,6 +9,7 @@
 #include "vm/vm.h"
 #endif
 
+struct lock;
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -91,11 +92,15 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
-	int original_priority;              /* 🔥 Modified: priority before donation */
-	int64_t wakeup_tick;                /* 🔥 Modified: possibly can lead to macro error */ /* #define list_entry(LIST_ELEM, STRUCT, MEMBER) */
+
+	int original_priority; /* 🔥 Added */
+	struct lock *waiting_for; /* 🔥 Added */
+	struct list donators; /* 🔥 Added */
+	struct list_elem elem_for_donators; /* 🔥 Added */
+	int64_t wakeup_tick; /* 🔥 Modified: afraid that this modification possibly can lead to a macro error */ /* #define list_entry(LIST_ELEM, STRUCT, MEMBER) */
 
 	/* Shared between thread.c and synch.c. */
-	struct list_elem elem;              /* List element. */
+	struct list_elem elem;              /* 👀 ready_list + sleep_list + waiters (semaphore) */
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -150,5 +155,8 @@ void do_iret (struct intr_frame *tf);
 void check_preemption(void); /* 🔥 Added */
 bool thread_cmp_priority_desc (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool thread_cmp_priority_asc (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void thread_refresh_priority (struct thread *t);
+void thread_remove_lock_donations (struct lock *lock);
+void thread_propagate_donation (struct thread *t);
 
 #endif /* threads/thread.h */

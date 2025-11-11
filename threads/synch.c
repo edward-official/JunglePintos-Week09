@@ -193,8 +193,17 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	struct thread *curr = thread_current ();
+	if (lock->holder != NULL) { /* 🔥 If holder already exists */
+		curr->waiting_for = lock;
+		list_push_back (&lock->holder->donators, &curr->elem_for_donators);
+		thread_refresh_priority (lock->holder);
+		thread_propagate_donation (lock->holder);
+	}
+
 	sema_down (&lock->semaphore);
-	lock->holder = thread_current ();
+	curr->waiting_for = NULL;
+	lock->holder = curr;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -227,8 +236,12 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
+	thread_remove_lock_donations (lock);
+	thread_refresh_priority (thread_current ());
+
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
+	check_preemption();
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -253,8 +266,7 @@ static bool cond_waiter_cmp_priority_asc (const struct list_elem *a,
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
    code to receive the signal and act upon it. */
-void
-cond_init (struct condition *cond) {
+void cond_init (struct condition *cond) {
 	ASSERT (cond != NULL);
 
 	list_init (&cond->waiters);
@@ -333,8 +345,7 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 }
 
 static bool
-cond_waiter_cmp_priority_asc (const struct list_elem *a,
-		const struct list_elem *b, void *aux UNUSED) {
+cond_waiter_cmp_priority_asc (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
 	const struct semaphore_elem *sa = list_entry (a, struct semaphore_elem, elem);
 	const struct semaphore_elem *sb = list_entry (b, struct semaphore_elem, elem);
 

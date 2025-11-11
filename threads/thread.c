@@ -49,6 +49,7 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
+#define DONATION_MAX_DEPTH 8
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -208,7 +209,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
-	check_preemption(); /* 🔥 Modify Here */
+	check_preemption(); /* 🔥 Check if the created thread has to preempt */
 	return tid;
 }
 
@@ -371,16 +372,68 @@ thread_wake_up (int64_t current_tick) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
-	check_preemption(); /* 🔥 Modify Here */
-	/* If current thread got no longer prioritized, yield */
+	struct thread *curr = thread_current ();
+	curr->original_priority = new_priority;
+	thread_refresh_priority (curr);
+	if (curr->waiting_for != NULL)
+		thread_propagate_donation (curr);
+	check_preemption(); /* 🔥 If current thread got no longer prioritized, yield */
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) {
-	/* If donate given, return the donated priority */
-	return thread_current ()->priority;
+	struct thread *curr = thread_current ();
+	thread_refresh_priority (curr);
+	return curr->priority;
+}
+
+void
+thread_refresh_priority (struct thread *t) {
+	if (t == NULL)
+		return;
+
+	int max_priority = t->original_priority;
+	struct list_elem *e;
+	for (e = list_begin (&t->donators); e != list_end (&t->donators); e = list_next (e)) {
+		struct thread *donor = list_entry (e, struct thread, elem_for_donators);
+		if (donor->priority > max_priority)
+			max_priority = donor->priority;
+	}
+	t->priority = max_priority;
+}
+
+void
+thread_remove_lock_donations (struct lock *lock) {
+	if (lock == NULL)
+		return;
+
+	struct thread *curr = thread_current ();
+	struct list_elem *e = list_begin (&curr->donators);
+	while (e != list_end (&curr->donators)) {
+		struct thread *donor = list_entry (e, struct thread, elem_for_donators);
+		if (donor->waiting_for == lock)
+			e = list_remove (e);
+		else
+			e = list_next (e);
+	}
+}
+
+void
+thread_propagate_donation (struct thread *t) {
+	if (t == NULL)
+		return;
+
+	int depth = 0;
+	while (t->waiting_for != NULL && depth < DONATION_MAX_DEPTH) {
+		struct lock *lock = t->waiting_for;
+		struct thread *holder = lock->holder;
+		if (holder == NULL)
+			break;
+		thread_refresh_priority (holder);
+		t = holder;
+		depth++;
+	}
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -471,6 +524,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
+	t->original_priority = priority;
+	t->waiting_for = NULL;
+	list_init (&t->donators);
 	t->magic = THREAD_MAGIC;
 }
 
