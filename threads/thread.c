@@ -4,6 +4,8 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
+#include "devices/timer.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -50,6 +52,8 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 #define DONATION_MAX_DEPTH 8
+#define FP_SHIFT 14
+#define FP_F (1 << FP_SHIFT)
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -64,6 +68,14 @@ static void init_thread (struct thread *, const char *name, int priority);
 static void do_schedule(int status);
 static void schedule (void);
 static tid_t allocate_tid (void);
+static void mlfqs_tick (void);
+static void mlfqs_update_load_avg (void);
+static int mlfqs_ready_threads (void);
+static inline int int_to_fp (int);
+static inline int fp_add (int, int);
+static inline int fp_mul_int (int, int);
+static inline int fp_div_int (int, int);
+static inline int fp_to_int_nearest (int);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -80,6 +92,8 @@ static tid_t allocate_tid (void);
 // Because the gdt will be setup after the thread_init, we should
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
+static int load_avg;
+static int64_t mlfqs_ticks;
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -112,6 +126,8 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&sleep_list); /* 🔥 Modified */
 	list_init (&destruction_req);
+	load_avg = 0;
+	mlfqs_ticks = 0;
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -155,6 +171,9 @@ thread_tick (void) {
 	/* Enforce preemption. */
 	if (++thread_ticks >= TIME_SLICE)
 		intr_yield_on_return ();
+
+	if (thread_mlfqs)
+		mlfqs_tick ();
 }
 
 /* Prints thread statistics. */
@@ -452,8 +471,10 @@ thread_get_nice (void) {
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) {
-	/* TODO: Your implementation goes here */
-	return 0;
+	enum intr_level old_level = intr_disable ();
+	int value = fp_to_int_nearest (fp_mul_int (load_avg, 100));
+	intr_set_level (old_level);
+	return value;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -461,6 +482,57 @@ int
 thread_get_recent_cpu (void) {
 	/* TODO: Your implementation goes here */
 	return 0;
+}
+
+static void
+mlfqs_tick (void) {
+	mlfqs_ticks++;
+	if (mlfqs_ticks % TIMER_FREQ == 0)
+		mlfqs_update_load_avg ();
+}
+
+static void
+mlfqs_update_load_avg (void) {
+	int n_ready_threads = mlfqs_ready_threads ();
+	int term1 = fp_div_int (fp_mul_int (load_avg, 59), 60);
+	int term2 = fp_div_int (int_to_fp (n_ready_threads), 60);
+	load_avg = fp_add (term1, term2);
+}
+
+static int
+mlfqs_ready_threads (void) {
+	int n_ready_threads = list_size (&ready_list);
+	if (thread_current () != idle_thread)
+		n_ready_threads++;
+	return n_ready_threads;
+}
+
+static inline int
+int_to_fp (int n) {
+	return n * FP_F;
+}
+
+static inline int
+fp_add (int x, int y) {
+	return x + y;
+}
+
+static inline int
+fp_mul_int (int x, int n) {
+	return (int) (((int64_t) x) * n);
+}
+
+static inline int
+fp_div_int (int x, int n) {
+	return (int) (((int64_t) x) / n);
+}
+
+static inline int
+fp_to_int_nearest (int x) {
+	if (x >= 0)
+		return (x + FP_F / 2) / FP_F;
+	else
+		return (x - FP_F / 2) / FP_F;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
