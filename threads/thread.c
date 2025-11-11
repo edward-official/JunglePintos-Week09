@@ -238,6 +238,15 @@ thread_cmp_priority (const struct list_elem *a,
   return ta->priority > tb->priority;
 }
 
+bool
+r_thread_cmp_priority (const struct list_elem *a,
+                     const struct list_elem *b,
+                     void *aux UNUSED) {
+  const struct thread *ta = list_entry (a, struct thread, elem);
+  const struct thread *tb = list_entry (b, struct thread, elem);
+  return ta->priority < tb->priority;
+}
+
 /* Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)
@@ -371,9 +380,14 @@ thread_wake_up (int64_t current_tick) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+
+	thread_current()->original_priority = new_priority;
+
+	refresh_priority();
+
 	//NOTE : thread_set_priority에 우선순위 부여 후 바꿔주는 코드 추가
 	rchange_priority();
+
 }
 
 /* Returns the current thread's priority. */
@@ -469,7 +483,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
+
 	t->priority = priority;
+
+	//NOTE 추가
+	t->original_priority = priority;
+	list_init(&t->holding_locks);
+	t->waiting_lock = NULL;
+
 	t->magic = THREAD_MAGIC;
 }
 
