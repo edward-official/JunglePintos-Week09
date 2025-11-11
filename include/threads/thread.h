@@ -86,17 +86,22 @@ typedef int tid_t;
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
 struct thread {
+	int origin_priority; //for donation // [DONATION]
+	struct lock *wait_on_lock; // [DONATION]
+	struct list donations; // [DONATION]
+	struct list_elem donation_elem; // [DONATION]
+
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
-		int priority;                       /* Priority. */
-		/* 스레드가 깨어나야 할 시간(tick)을 저장합니다.
+	int priority;                       /* Priority. */
+	/* 스레드가 깨어나야 할 시간(tick)을 저장합니다.
 		   timer_sleep()에 의해 설정되며, thread_wake_up()에서 사용됩니다. */
-		int64_t wakeup_tick;
+	int64_t wakeup_tick;
 
-		/* Shared between thread.c and synch.c. */
-		struct list_elem elem;              /* List element. */
+	/* Shared between thread.c and synch.c. */
+	struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -143,6 +148,11 @@ bool thread_cmp_priority (const struct list_elem *a, const struct list_elem *b, 
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+
+void donate_priority(void); // [DONATION]
+void remove_donations(struct lock *lock); // [DONATION]
+void refresh_priority(void); // [DONATION]
+bool donation_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux); // [DONATION]
 
 int thread_get_nice (void);
 void thread_set_nice (int);

@@ -202,7 +202,15 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	if (lock->holder) { // [DONATION]
+		thread_current()->wait_on_lock = lock; // [DONATION]
+		list_insert_ordered(&lock->holder->donations, &thread_current()->donation_elem, donation_cmp_priority, NULL); // [DONATION]
+		donate_priority(); // [DONATION]
+	}
+
 	sema_down (&lock->semaphore);
+
+	thread_current()->wait_on_lock = NULL; // [DONATION]
 	lock->holder = thread_current ();
 }
 
@@ -235,6 +243,9 @@ void
 lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
+
+	remove_donations(lock); // [DONATION]
+	refresh_priority(); // [DONATION]
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
@@ -294,11 +305,12 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
-
+	enum intr_level old_level = intr_disable();
 	list_insert_ordered (&cond->waiters, &thread_current () -> elem, thread_cmp_priority, NULL);//우선순위대로 waiter에 넣는다
 	
 	lock_release (lock);
 	thread_block();
+	intr_set_level (old_level);
 	lock_acquire (lock);
 }
 
