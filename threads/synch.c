@@ -308,7 +308,7 @@ void cond_init (struct condition *cond) {
    we need to sleep. */
 void
 cond_wait (struct condition *cond, struct lock *lock) {
-	struct semaphore_elem waiter;
+	struct semaphore_elem waiter; /* 🔥 edward: list element for condition waiters */
 
 	ASSERT (cond != NULL);
 	ASSERT (lock != NULL);
@@ -317,8 +317,8 @@ cond_wait (struct condition *cond, struct lock *lock) {
 
 	sema_init (&waiter.semaphore, 0);
 	list_push_back (&cond->waiters, &waiter.elem);
-	lock_release (lock);
-	sema_down (&waiter.semaphore);
+	lock_release (lock); /* 🔥 edward: need to release the lock in order to let other thread to access the condition variable */
+	sema_down (&waiter.semaphore); /* 🔥 edward: get into sleep while waiting for condition variables */
 	lock_acquire (lock);
 }
 
@@ -329,6 +329,11 @@ cond_wait (struct condition *cond, struct lock *lock) {
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an
    interrupt handler. */
+/* 🔥 edward
+wake the top waiter up from the waiters(condition variables)
+then put the thread in the ready list
+and proceed to reschedule
+*/
 void
 cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (cond != NULL);
@@ -337,9 +342,9 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	if (!list_empty (&cond->waiters)) {
-		struct list_elem *popped = list_max (&cond->waiters, cond_waiter_cmp_priority_asc, NULL);
-		list_remove (popped);
-		sema_up (&list_entry (popped, struct semaphore_elem, elem)->semaphore);
+		struct list_elem *top_waiter = list_max (&cond->waiters, cond_waiter_cmp_priority_asc, NULL);
+		list_remove (top_waiter);
+		sema_up (&list_entry (top_waiter, struct semaphore_elem, elem)->semaphore);
 	}
 }
 
