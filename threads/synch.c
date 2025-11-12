@@ -68,11 +68,10 @@ sema_down (struct semaphore *sema) {
 	old_level = intr_disable ();
 	while (sema->value == 0) {
 		/* [MODIFIED] PRIORITY SCHEDULING ON SEMAPHORE
-		 * 기존의 list_push_back은 스레드를 대기열의 맨 뒤에 추가하여 FIFO(선착순) 방식으로 동작한다.
-		 * 이를 list_insert_ordered로 변경하여, 대기하는 스레드들이 우선순위에 따라 정렬되도록 한다.
-		 * 이를 통해 sema_up에서 항상 가장 우선순위가 높은 스레드를 깨우게 되어,
-		 * priority-fifo 테스트를 통과 */
-		list_insert_ordered (&sema->waiters, &thread_current ()->elem, thread_cmp_priority, NULL);
+		 * 기존의 list_push_back은 스레드를 대기열의 맨 뒤에 추가하여 FIFO(선착순) 방식으로 동작했다.
+		 * 이를 list_push_back으로 유지하되, sema_up에서 list_max를 사용해 가장 우선순위가 높은 스레드를 깨운다.
+		 * 이를 통해 priority-fifo 테스트를 통과한다. */
+		list_push_back (&sema->waiters, &thread_current ()->elem);
 		thread_block ();
 	}
 	sema->value--;
@@ -115,9 +114,11 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
-		thread_unblock (list_entry (list_pop_front (&sema->waiters),
-					struct thread, elem));
+	if (!list_empty (&sema->waiters)) {
+		struct list_elem *e = list_min(&sema->waiters, thread_cmp_priority, NULL);
+		list_remove(e);
+		thread_unblock (list_entry (e, struct thread, elem));
+	}
 	sema->value++;
 
 	/* [MODIFIED] PREEMPTION BY PRIORITY

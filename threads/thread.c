@@ -27,8 +27,8 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
-/* 잠자는 스레드들을 관리하기 위한 리스트입니다.
-   깨어날 시간이 가장 가까운 스레드가 리스트의 맨 앞에 오도록 정렬됩니다. */
+/* 잠자는 스레드들을 관리하기 위한 리스트이다.
+   깨어날 시간이 가장 가까운 스레드가 리스트의 맨 앞에 오도록 정렬된다. */
 static struct list sleep_list; /* 🔥 Modified */
 
 /* Idle thread. */
@@ -113,7 +113,7 @@ thread_init (void) {
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
 	list_init (&ready_list);
-	list_init (&sleep_list); /* sleep_list를 초기화합니다. */
+	list_init (&sleep_list); /* sleep_list를 초기화한다. */
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -215,8 +215,8 @@ thread_create (const char *name, int priority,
 
 	/* [MODIFIED] PREEMPTION BY PRIORITY
 	 * 새로 생성된 스레드(t)의 우선순위가 현재 실행중인 스레드보다 높으면,
-	 * 현재 스레드가 CPU를 양보(yield)하여 우선순위가 높은 스레드가 즉시 실행되도록 합니다.
-	 * 이는 선점(preemptive) 스케줄링을 구현하는 핵심 로직 중 하나입니다. */
+	 * 현재 스레드가 CPU를 양보(yield)하여 우선순위가 높은 스레드가 즉시 실행되도록 한다.
+	 * 이는 선점(preemptive) 스케줄링을 구현하는 핵심 로직 중 하나이다. */
 	if (t->priority > thread_current ()->priority) {
 		thread_yield ();
 	}
@@ -315,7 +315,7 @@ thread_exit (void) {
 	NOT_REACHED ();
 }
 
-/* [MODIFIED] Checks if the current thread should yield the CPU. */
+/* [MODIFIED] 현재 스레드가 CPU를 양보해야 하는지 확인한다. */
 bool
 thread_should_yield(void) {
 	return !list_empty(&ready_list) && thread_current()->priority \
@@ -338,9 +338,9 @@ thread_yield (void) {
   intr_set_level(old_level);  /* 🔥 Restore the interrupt level */
 }
 
-/* sleep_list를 정렬하기 위한 비교 함수입니다.
+/* sleep_list를 정렬하기 위한 비교 함수이다.
    두 스레드의 wakeup_tick 값을 비교하여 더 작은 값을 가진 스레드(더 일찍 깨어날 스레드)가
-   리스트의 앞쪽에 위치하도록 합니다. */
+   리스트의 앞쪽에 위치하도록 한다. */
 static bool
 is_left_time_earlier (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
   const struct thread *ta = list_entry (a, struct thread, elem);
@@ -348,7 +348,7 @@ is_left_time_earlier (const struct list_elem *a, const struct list_elem *b, void
   return ta->wakeup_tick < tb->wakeup_tick;
 }
 
-/* 현재 스레드를 잠재웁니다. timer_sleep()에 의해 호출됩니다. */
+/* 현재 스레드를 잠재운다. timer_sleep()에 의해 호출된다. */
 void
 thread_sleep (void) {
 	/* 🔥 Previous action: timer_sleep (thread context)
@@ -357,40 +357,40 @@ thread_sleep (void) {
 	struct thread *curr = thread_current();
 	enum intr_level old_level;
 
-	/* 이 함수는 인터럽트 컨텍스트가 아닌 스레드 컨텍스트에서 호출되어야 합니다. */
+	/* 이 함수는 인터럽트 컨텍스트가 아닌 스레드 컨텍스트에서 호출되어야 한다. */
 	ASSERT(!intr_context());  /* 🔥 Check if interrupt handler is currently operating */
 
-	/* sleep_list를 조작하는 동안 인터럽트를 비활성화하여 원자성을 보장합니다. */
+	/* sleep_list를 조작하는 동안 인터럽트를 비활성화하여 원자성을 보장한다. */
 	old_level = intr_disable();  /* 🔥 Disable interrupt since we need to switch the context */
 	if (curr != idle_thread) {
-		/* 현재 스레드를 wakeup_tick 순서에 맞게 sleep_list에 삽입합니다. */
+		/* 현재 스레드를 wakeup_tick 순서에 맞게 sleep_list에 삽입한다. */
 		list_insert_ordered(&sleep_list, &curr->elem, is_left_time_earlier, NULL); /* 🔥 Insert into sleep list */
-		/* 스레드 상태를 BLOCKED로 변경하고, 다른 스레드에게 CPU를 양보합니다. */
+		/* 스레드 상태를 BLOCKED로 변경하고, 다른 스레드에게 CPU를 양보한다. */
 		do_schedule(THREAD_BLOCKED); /* 🔥 Hand over the control to another thread */
 	}
-	/* 인터럽트 상태를 복원합니다. */
+	/* 인터럽트 상태를 복원한다. */
 	intr_set_level(old_level);  /* 🔥 Restore the interrupt level */
 }
 
-/* 잠자는 스레드들을 깨웁니다. timer_interrupt()에 의해 매 틱마다 호출됩니다. */
+/* 잠자는 스레드들을 깨운다. timer_interrupt()에 의해 매 틱마다 호출된다. */
 void
 thread_wake_up (int64_t current_tick) {
 	/* 이 함수는 인터럽트 핸들러 내부에서 호출되므로,
-	   인터럽트는 이미 비활성화된 상태입니다. */
+	   인터럽트는 이미 비활성화된 상태이다. */
 	struct list_elem *e = list_begin (&sleep_list);
 
 	while (e != list_end (&sleep_list)) {
 		struct thread *t = list_entry (e, struct thread, elem);
 
-		/* 현재 스레드의 깨어날 시간이 되었는지 확인합니다. */
+		/* 현재 스레드의 깨어날 시간이 되었는지 확인한다. */
 		if (t->wakeup_tick <= current_tick) {
-			/* 리스트에서 스레드를 제거하고, 다음 요소를 가리키도록 'e'를 업데이트합니다. */
+			/* 리스트에서 스레드를 제거하고, 다음 요소를 가리키도록 'e'를 업데이트한다. */
 			e = list_remove (e);
-			/* 스레드를 unblock하여 ready_list로 옮깁니다. */
+			/* 스레드를 unblock하여 ready_list로 옮긴다. */
 			thread_unblock (t);
 		} else {
 			/* 리스트가 wakeup_tick 순으로 정렬되어 있으므로,
-			   이 스레드가 깰 시간이 아니라면 뒷 스레드도 깰 시간이 아닙니다. */
+			   이 스레드가 깰 시간이 아니라면 뒷 스레드도 깰 시간이 아니다. */
 			break;
 		}
 	}
@@ -703,12 +703,9 @@ void
 refresh_priority(void) {
     struct thread *curr = thread_current();
     
-    // 1. 자신의 원래 우선순위로 초기화
     curr->priority = curr->origin_priority;
 
-    // 2. donations 리스트를 확인하여, 더 높은 우선순위가 있다면 갱신
     if (!list_empty(&curr->donations)) {
-        // 리스트를 우선순위 내림차순으로 정렬
         list_sort(&curr->donations, donation_cmp_priority, NULL);
         
         struct thread *donor = list_entry(list_front(&curr->donations), struct thread, donation_elem);

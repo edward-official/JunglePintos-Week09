@@ -98,7 +98,7 @@ struct thread {
 	int priority;                       /* Priority. */
 	/* 스레드가 깨어나야 할 시간(tick)을 저장합니다.
 		   timer_sleep()에 의해 설정되며, thread_wake_up()에서 사용됩니다. */
-	int64_t wakeup_tick;
+	int64_t wakeup_tick;                /* 🔥 스레드가 깨어나야 할 시간을 저장하는 변수이다. */
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
