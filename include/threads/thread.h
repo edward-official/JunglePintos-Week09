@@ -92,15 +92,23 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
+	int nice;
+	int recent_cpu;
 
-	int original_priority; /* 🔥 Added */
-	struct lock *waiting_for; /* 🔥 Added */
-	struct list donators; /* 🔥 Added */
-	struct list_elem elem_for_donators; /* 🔥 Added */
-	int64_t wakeup_tick; /* 🔥 Modified: afraid that this modification possibly can lead to a macro error */ /* #define list_entry(LIST_ELEM, STRUCT, MEMBER) */
+	int original_priority;
+	struct lock *waiting_for;
+	struct list donators;
+	/* 🔥 edward
+	list elements must be removed entirely somewhere
+	- elem: schedule(through destruction_req using def)
+	- elem_for_donators: thread_remove_lock_donations
+	- elem_whole: thread_exit
+	*/
+	struct list_elem elem; /* 🔥 edward: ready_list + sleep_list + waiters (semaphore) */
+	struct list_elem elem_for_donators;
+	struct list_elem elem_whole;
+	int64_t wakeup_tick;
 
-	/* Shared between thread.c and synch.c. */
-	struct list_elem elem;              /* 👀 ready_list + sleep_list + waiters (semaphore) */
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -138,8 +146,8 @@ tid_t thread_tid (void);
 const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
-void thread_sleep (void); /* 🔥 Modified */
-void thread_wake_up (int64_t current_tick); /* 🔥 Modified */
+void thread_sleep (void);
+void thread_wake_up (int64_t current_tick);
 void thread_yield (void);
 
 int thread_get_priority (void);
@@ -152,7 +160,7 @@ int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
-void check_preemption(void); /* 🔥 Added */
+void check_preemption(void);
 bool thread_cmp_priority_desc (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 bool thread_cmp_priority_asc (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 void thread_refresh_priority (struct thread *t);
