@@ -10,6 +10,7 @@
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "devices/timer.h"
 #include "intrinsic.h"
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -30,6 +31,8 @@ static struct list ready_list;
 /* 잠자는 스레드들을 관리하기 위한 리스트이다.
    깨어날 시간이 가장 가까운 스레드가 리스트의 맨 앞에 오도록 정렬된다. */
 static struct list sleep_list; /* 🔥 Modified */
+static struct list all_list;         /* [MLFQS] List of all threads. */
+static fixed_t load_avg;            /* [MODIFIED] For MLFQS. */
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -114,6 +117,7 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&sleep_list); /* sleep_list를 초기화한다. */
+	list_init (&all_list);      /* [MLFQS] Initialize all_list. */
 	list_init (&destruction_req);
 
 	/* Set up a thread structure for the running thread. */
@@ -144,6 +148,35 @@ thread_start (void) {
 void
 thread_tick (void) {
 	struct thread *t = thread_current ();
+
+	/* [MLFQS] MLFQS periodic updates. */
+	if (thread_mlfqs) {
+		/* 1. Increment recent_cpu for the running thread every tick. */
+		if (t != idle_thread) {
+			t->recent_cpu = FP_ADD_INT(t->recent_cpu, 1);
+		}
+
+		/* 2. Recalculate load_avg and recent_cpu for all threads every second. */
+		if (timer_ticks() % TIMER_FREQ == 0) {
+			mlfqs_calculate_load_avg();
+			
+			struct list_elem *e;
+			for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+				struct thread *th = list_entry(e, struct thread, all_elem);
+				mlfqs_calculate_recent_cpu(th);
+			}
+		}
+
+		/* 3. Recalculate priority for all threads every 4 ticks. */
+		if (timer_ticks() % 4 == 0) {
+			struct list_elem *e;
+			for (e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)) {
+				struct thread *th = list_entry(e, struct thread, all_elem);
+				mlfqs_calculate_priority(th);
+			}
+			list_sort(&ready_list, thread_cmp_priority, NULL);
+		}
+	}
 
 	/* Update statistics. */
 	if (t == idle_thread)
@@ -197,6 +230,10 @@ thread_create (const char *name, int priority,
 
 	/* Initialize thread. */
 	init_thread (t, name, priority);
+	if (thread_mlfqs) {
+		t->nice = thread_current()->nice;
+		t->recent_cpu = thread_current()->recent_cpu;
+	}
 	tid = t->tid = allocate_tid ();
 
 	/* Call the kernel_thread if it scheduled.
@@ -209,6 +246,9 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+
+	/* [MLFQS] Add to all threads list. */
+	list_push_back(&all_list, &t->all_elem);
 
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -399,12 +439,14 @@ thread_wake_up (int64_t current_tick) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->origin_priority = new_priority; // [DONATION]
-	
-	refresh_priority(); // [DONATION]
+	if (!thread_mlfqs) {
+		thread_current ()->origin_priority = new_priority; // [DONATION]
+		
+		refresh_priority(); // [DONATION]
 
-	if(thread_should_yield()){ // [DONATION]
-		thread_yield(); // [DONATION]
+		if(thread_should_yield()){ // [DONATION]
+			thread_yield(); // [DONATION]
+		}
 	}
 }
 /* Returns the current thread's priority. */
@@ -503,9 +545,12 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
 
-	t->origin_priority = priority; // [DONATION]
-	t->wait_on_lock = NULL; // [DONATION]
-	list_init(&t->donations); // [DONATION]
+	t->origin_priority = priority;
+	list_init(&t->donations);
+
+	/* [MODIFIED] For MLFQS. */
+	t->nice = 0;
+	t->recent_cpu = 0;
 		
 }
 
@@ -665,6 +710,7 @@ schedule (void) {
 		   schedule(). */
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
 			ASSERT (curr != next);
+			list_remove(&curr->all_elem); /* [MLFQS] Remove from all_list. */
 			list_push_back (&destruction_req, &curr->elem);
 		}
 
@@ -745,4 +791,48 @@ donate_priority(void) {
         t = holder;
         depth++;
     }
+}
+
+/* [MLFQS] Calculates the priority for a thread based on MLFQS formula. */
+void
+mlfqs_calculate_priority (struct thread *t) {
+	if (t == idle_thread) return;
+
+	int recent_cpu_val = FP_TO_INT_TRUNC(FP_DIV_INT(t->recent_cpu, 4));
+	int nice_val = t->nice * 2;
+	int new_priority = PRI_MAX - recent_cpu_val - nice_val;
+
+	if (new_priority < PRI_MIN) {
+		t->priority = PRI_MIN;
+	} else if (new_priority > PRI_MAX) {
+		t->priority = PRI_MAX;
+	} else {
+		t->priority = new_priority;
+	}
+}
+
+/* [MLFQS] Calculates the recent_cpu value for a thread. */
+void
+mlfqs_calculate_recent_cpu (struct thread *t) {
+	if (t == idle_thread) return;
+
+	fixed_t load_avg_mul_2 = FP_MUL_INT(load_avg, 2);
+	fixed_t coefficient = FP_DIV(load_avg_mul_2, FP_ADD_INT(load_avg_mul_2, 1));
+	fixed_t term1 = FP_MUL(coefficient, t->recent_cpu);
+	
+	t->recent_cpu = FP_ADD_INT(term1, t->nice);
+}
+
+/* [MLFQS] Calculates the system load average. */
+void
+mlfqs_calculate_load_avg (void) {
+	int ready_threads = list_size(&ready_list);
+	if (thread_current() != idle_thread) {
+		ready_threads++;
+	}
+
+	fixed_t term1 = FP_MUL(FP_DIV_INT(INT_TO_FP(59), 60), load_avg);
+	fixed_t term2 = FP_MUL_INT(FP_DIV_INT(INT_TO_FP(1), 60), ready_threads);
+
+	load_avg = FP_ADD(term1, term2);
 }

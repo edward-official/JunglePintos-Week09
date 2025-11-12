@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/fixed-point.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -91,6 +92,10 @@ struct thread {
 	struct list donations; // [DONATION]
 	struct list_elem donation_elem; // [DONATION]
 
+	/* [MODIFIED] For MLFQS. */
+	int nice;                           /* Niceness level. */
+	fixed_t recent_cpu;                 /* Recent CPU time used, in fixed-point format. */
+
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
@@ -102,6 +107,7 @@ struct thread {
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+	struct list_elem all_elem;          /* [MLFQS] Element for all_list. */
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -153,6 +159,11 @@ void donate_priority(void); // [DONATION]
 void remove_donations(struct lock *lock); // [DONATION]
 void refresh_priority(void); // [DONATION]
 bool donation_cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux); // [DONATION]
+
+/* [MLFQS] MLFQS calculation functions. */
+void mlfqs_calculate_priority (struct thread *t);
+void mlfqs_calculate_recent_cpu (struct thread *t);
+void mlfqs_calculate_load_avg (void);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
