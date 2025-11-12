@@ -30,6 +30,7 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 static struct list sleep_list; /* 🔥 Modified */
+static struct list all_threads;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -76,6 +77,10 @@ static inline int fp_add (int, int);
 static inline int fp_mul_int (int, int);
 static inline int fp_div_int (int, int);
 static inline int fp_to_int_nearest (int);
+static inline int fp_to_int_trunc (int);
+static inline int fp_add_int (int x, int n);
+static inline int fp_mul (int x, int y); 
+static inline int fp_div (int x, int y);
 
 /* Returns true if T appears to point to a valid thread. */
 #define is_thread(t) ((t) != NULL && (t)->magic == THREAD_MAGIC)
@@ -126,6 +131,7 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&sleep_list); /* 🔥 Modified */
 	list_init (&destruction_req);
+	list_init (&all_threads);
 	load_avg = 0;
 	mlfqs_ticks = 0;
 
@@ -391,6 +397,7 @@ thread_wake_up (int64_t current_tick) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
+	if (thread_mlfqs) return;
 	struct thread *curr = thread_current ();
 	curr->original_priority = new_priority;
 	thread_refresh_priority (curr);
@@ -459,13 +466,34 @@ thread_propagate_donation (struct thread *t) {
 void
 thread_set_nice (int nice UNUSED) {
 	/* TODO: Your implementation goes here */
+	thread_current()->nice = nice;
+	mlfqs_recalc_priority(thread_current(), NULL);
+	check_preemption();
 }
+
+void mlfqs_recalc_priority(struct thread *t, void *aux UNUSED){
+    
+    // 2. '버림' 함수 (fp_to_int_trunc) 사용
+    // (fp_to_int_trunc(x)는 (x / FP_F)와 같습니다)
+    int term2 = fp_to_int_trunc(fp_div_int(t->recent_cpu, 4));
+    int term3 = t->nice * 2;
+    int new_priority = PRI_MAX - term2 - term3;
+
+    // 3. 0~63 사이로 범위 제한 (Clamping)
+    if (new_priority < PRI_MIN) {
+        new_priority = PRI_MIN;
+    } else if (new_priority > PRI_MAX) {
+        new_priority = PRI_MAX;
+    }
+    
+    t->priority = new_priority;
+};
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) {
 	/* TODO: Your implementation goes here */
-	return 0;
+	return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -481,14 +509,64 @@ thread_get_load_avg (void) {
 int
 thread_get_recent_cpu (void) {
 	/* TODO: Your implementation goes here */
-	return 0;
+	enum intr_level old_level = intr_disable ();
+	int value = fp_to_int_nearest (fp_mul_int (thread_current()->recent_cpu, 100));
+	intr_set_level (old_level);
+	return value;
 }
 
 static void
 mlfqs_tick (void) {
 	mlfqs_ticks++;
-	if (mlfqs_ticks % TIMER_FREQ == 0)
+
+	struct thread *curr = thread_current();
+
+	if(curr != idle_thread){
+		curr->recent_cpu = fp_add(curr->recent_cpu, int_to_fp(1));
+	}
+
+	if (mlfqs_ticks % 4 == 0) {
+        thread_foreach(mlfqs_recalc_priority, NULL);
+    }
+
+	if (mlfqs_ticks % TIMER_FREQ == 0){
 		mlfqs_update_load_avg ();
+		thread_foreach(mlfqs_recalc_recent_cpu, NULL);
+	}
+}
+
+void
+thread_foreach (thread_action_func *func, void *aux)
+{
+  struct list_elem *e;
+  enum intr_level old_level = intr_disable (); // 리스트 순회 중 변경 방지
+
+  for (e = list_begin (&all_threads); e != list_end (&all_threads); e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, allelem);
+      func (t, aux);
+    }
+    
+  intr_set_level (old_level);
+}
+
+void
+mlfqs_recalc_recent_cpu (struct thread *t, void *aux UNUSED)
+{
+    ASSERT (is_thread (t));
+    if (t == idle_thread)
+        return;
+
+    // 1. 계수 (decay) 계산: (2 * load_avg) / (2 * load_avg + 1)
+    // load_avg는 전역 변수, t->recent_cpu와 t->nice는 멤버 변수입니다.
+    int load_avg_x_2 = fp_mul_int(load_avg, 2);
+    int decay_numerator = load_avg_x_2;
+    int decay_denominator = fp_add_int(load_avg_x_2, 1);
+    int decay = fp_div(decay_numerator, decay_denominator);
+
+    // 2. 공식 적용: recent_cpu = decay * recent_cpu + nice
+    int term1 = fp_mul(decay, t->recent_cpu);
+    t->recent_cpu = fp_add_int(term1, t->nice);
 }
 
 static void
@@ -505,6 +583,11 @@ mlfqs_ready_threads (void) {
 	if (thread_current () != idle_thread)
 		n_ready_threads++;
 	return n_ready_threads;
+}
+
+static inline int
+fp_to_int_trunc (int x) {
+    return x / FP_F;
 }
 
 static inline int
@@ -534,6 +617,24 @@ fp_to_int_nearest (int x) {
 	else
 		return (x - FP_F / 2) / FP_F;
 }
+
+static inline int
+fp_add_int (int x, int n) {
+    return x + (n * FP_F);
+}
+
+// 고정 소수점 * 고정 소수점
+static inline int
+fp_mul (int x, int y) {
+    return (int) (((int64_t) x) * y / FP_F);
+}
+
+static inline int
+fp_div (int x, int y) {
+    return (int) (((int64_t) x) * FP_F / y);
+}
+
+
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
@@ -599,6 +700,15 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->original_priority = priority;
 	t->waiting_for = NULL;
 	list_init (&t->donators);
+	if (t == initial_thread) {
+        t->recent_cpu = 0;
+        t->nice = 0;
+    } else {
+        struct thread *parent = thread_current();
+        t->recent_cpu = parent->recent_cpu;
+        t->nice = parent->nice;
+    }
+	list_push_back (&all_threads, &t->allelem);
 	t->magic = THREAD_MAGIC;
 }
 
@@ -723,6 +833,7 @@ do_schedule(int status) {
 	while (!list_empty (&destruction_req)) {
 		struct thread *victim =
 			list_entry (list_pop_front (&destruction_req), struct thread, elem);
+		list_remove(&victim->allelem);
 		palloc_free_page(victim);
 	}
 	thread_current ()->status = status;

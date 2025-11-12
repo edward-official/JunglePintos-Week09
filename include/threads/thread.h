@@ -98,6 +98,9 @@ struct thread {
 	struct list donators; /* 🔥 Added */
 	struct list_elem elem_for_donators; /* 🔥 Added */
 	int64_t wakeup_tick; /* 🔥 Modified: afraid that this modification possibly can lead to a macro error */ /* #define list_entry(LIST_ELEM, STRUCT, MEMBER) */
+	int nice;
+	int recent_cpu;
+	struct list_elem allelem;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* 👀 ready_list + sleep_list + waiters (semaphore) */
@@ -128,6 +131,7 @@ void thread_tick (void);
 void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
+typedef void thread_action_func (struct thread *t, void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);
 
 void thread_block (void);
@@ -158,5 +162,7 @@ bool thread_cmp_priority_asc (const struct list_elem *a, const struct list_elem 
 void thread_refresh_priority (struct thread *t);
 void thread_remove_lock_donations (struct lock *lock);
 void thread_propagate_donation (struct thread *t);
-
+void thread_foreach (thread_action_func *func, void *aux);
+void mlfqs_recalc_recent_cpu (struct thread *t, void *aux UNUSED);
+void mlfqs_recalc_priority(struct thread *t, void *aux UNUSED);
 #endif /* threads/thread.h */

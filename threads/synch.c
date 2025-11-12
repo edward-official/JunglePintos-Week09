@@ -194,7 +194,7 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!lock_held_by_current_thread (lock));
 
 	struct thread *curr = thread_current ();
-	if (lock->holder != NULL) { /* 🔥 If holder already exists */
+	if (!thread_mlfqs && lock->holder != NULL) { /* 🔥 If holder already exists */
 		curr->waiting_for = lock;
 		list_push_back (&lock->holder->donators, &curr->elem_for_donators);
 		thread_refresh_priority (lock->holder);
@@ -236,9 +236,11 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	thread_remove_lock_donations (lock);
-	thread_refresh_priority (thread_current ());
-
+	if (!thread_mlfqs){
+		thread_remove_lock_donations (lock);
+		thread_refresh_priority (thread_current ());
+	}
+	
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 	check_preemption();
