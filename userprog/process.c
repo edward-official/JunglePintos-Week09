@@ -414,7 +414,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
-	/* TODO: Your code goes here.
+	/* TODO: Your code goes here. 이걸 먼저 해야할 일이다.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
 	success = true;

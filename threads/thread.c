@@ -381,11 +381,15 @@ thread_wake_up (int64_t current_tick) {
 void
 thread_set_priority (int new_priority) {
 
-	thread_current()->original_priority = new_priority;
+	// NOTE : 원래 코드
+	// thread_current()->priority = new_priority;
 
+	// NOTE : 수정 후 코드
+	thread_current()->original_priority = new_priority;
+	// 기부를 주는 쓰레드들의 우선순위 중 가장 큰 값을 기부 받는 함수
 	refresh_priority();
 
-	//NOTE : thread_set_priority에 우선순위 부여 후 바꿔주는 코드 추가
+	// yield
 	rchange_priority();
 
 }
