@@ -110,8 +110,10 @@ sema_up (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	if (!list_empty (&sema->waiters)) {
-		// thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem)); /* 🔥 Not popping the top-priority currently?? */
-		/* 🔥 Need to find a thread to wake from the waiting list: incomplete */
+		/* 🔥 edward
+		remove top thread from the waiters
+		and then unblock it and put it in the ready list
+		*/
 		struct list_elem *t = list_max(&sema->waiters, thread_cmp_priority_asc, NULL);
 		list_remove(t);
 		thread_unblock(list_entry (t, struct thread, elem));
@@ -187,6 +189,10 @@ lock_init (struct lock *lock) {
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
+/* 🔥 edward
+running thread tries to acquire lock
+if impossible, the running thread is blocked
+*/
 void
 lock_acquire (struct lock *lock) {
 	ASSERT (lock != NULL);
@@ -194,7 +200,13 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!lock_held_by_current_thread (lock));
 
 	struct thread *curr = thread_current ();
-	if (lock->holder != NULL) { /* 🔥 If holder already exists */
+	if (!thread_mlfqs && lock->holder != NULL) {
+		/* 🔥 edward
+		when lock is already occupied by another thread
+		donate priority to the holder
+		therefore, holder has to refresh its priority
+		then, we have to look for possibility for extra nested donation
+		*/
 		curr->waiting_for = lock;
 		list_push_back (&lock->holder->donators, &curr->elem_for_donators);
 		thread_refresh_priority (lock->holder);
@@ -202,7 +214,7 @@ lock_acquire (struct lock *lock) {
 	}
 
 	sema_down (&lock->semaphore);
-	curr->waiting_for = NULL;
+	curr->waiting_for = NULL; /* 🔥 edward: got the lock */
 	lock->holder = curr;
 }
 
@@ -236,12 +248,14 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	thread_remove_lock_donations (lock);
-	thread_refresh_priority (thread_current ());
+	if (!thread_mlfqs) {
+		thread_remove_lock_donations (lock);
+		thread_refresh_priority (thread_current ());
+	}
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
-	check_preemption();
+	check_preemption(); /* 🔥 edward: one waiter can possibly can take over the control */
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -294,7 +308,7 @@ void cond_init (struct condition *cond) {
    we need to sleep. */
 void
 cond_wait (struct condition *cond, struct lock *lock) {
-	struct semaphore_elem waiter;
+	struct semaphore_elem waiter; /* 🔥 edward: list element for condition waiters */
 
 	ASSERT (cond != NULL);
 	ASSERT (lock != NULL);
@@ -303,8 +317,8 @@ cond_wait (struct condition *cond, struct lock *lock) {
 
 	sema_init (&waiter.semaphore, 0);
 	list_push_back (&cond->waiters, &waiter.elem);
-	lock_release (lock);
-	sema_down (&waiter.semaphore);
+	lock_release (lock); /* 🔥 edward: need to release the lock in order to let other thread to access the condition variable */
+	sema_down (&waiter.semaphore); /* 🔥 edward: get into sleep while waiting for condition variables */
 	lock_acquire (lock);
 }
 
@@ -315,6 +329,11 @@ cond_wait (struct condition *cond, struct lock *lock) {
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to signal a condition variable within an
    interrupt handler. */
+/* 🔥 edward
+wake the top waiter up from the waiters(condition variables)
+then put the thread in the ready list
+and proceed to reschedule
+*/
 void
 cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (cond != NULL);
@@ -323,9 +342,9 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	if (!list_empty (&cond->waiters)) {
-		struct list_elem *popped = list_max (&cond->waiters, cond_waiter_cmp_priority_asc, NULL);
-		list_remove (popped);
-		sema_up (&list_entry (popped, struct semaphore_elem, elem)->semaphore);
+		struct list_elem *top_waiter = list_max (&cond->waiters, cond_waiter_cmp_priority_asc, NULL);
+		list_remove (top_waiter);
+		sema_up (&list_entry (top_waiter, struct semaphore_elem, elem)->semaphore);
 	}
 }
 
