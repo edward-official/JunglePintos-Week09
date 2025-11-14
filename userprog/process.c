@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "include/lib/string.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -158,34 +159,46 @@ error:
 	thread_exit ();
 }
 
-/* Switch the current execution context to the f_name.
- * Returns -1 on fail. */
-int
-process_exec (void *f_name) {
+// NOTE : exec함수
+/* 현재 실행 중인 스레드의 코드와 메모리를 싹 비우고, 새로운 프로그램으로 갈아치운 뒤 실행하는 함수 */
+
+int process_exec (void *f_name) {
+	//인자로 받은 파일 이름의 주소(예 : "ls -l foo")
 	char *file_name = f_name;
 	bool success;
 
-	/* We cannot use the intr_frame in the thread structure.
-	 * This is because when current thread rescheduled,
-	 * it stores the execution information to the member. */
+	//CPU 레지스터 상태를 담을 구조체
+	//커널모드에서 유저모드로 점프하고 난 뒤 사용할 레지스터 값들을 세팅
 	struct intr_frame _if;
+	//SEL_UDSEG / SEL_UCSEG -> 유저 데이터 영역, 유저 코드 영역을 사용한다.
 	_if.ds = _if.es = _if.ss = SEL_UDSEG;
 	_if.cs = SEL_UCSEG;
+	//인터럽트 허용 -> 프로그램 실행 중에 타이머나 키보드 입력을 받을 수 있게 인터럽트를 켭니다.
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
-	/* We first kill the current context */
+	//현재 프로세스가 가지고 있던 메모리(페이지 테이블, 파일 등)를 싹 지웁니다.
+	//새로운 프로그램으로 덮어쓰는 것이 목표기 때문에, 이전에 쓰던 흔적을 지우는 것.
 	process_cleanup ();
 
-	/* And then load the binary */
+	//하드디스크에서 file_name에 해당하는 파일(ELF)을 읽습니다.
+	//메모리에 코드와 데이터를 복사합니다.
+	//스택에 인자를 쌓습니다.(Argument Passing)
+	//_if 채우기 : _if.rip -> 프로그램 시작점 주소를 넣습니다.
+	//			  _if.rsp -> 아까 인자를 쌓은 스택의 꼭대기 주소를 넣습니다.
 	success = load (file_name, &_if);
 
-	/* If load failed, quit. */
+	//파일 이름 문자열은 이제 필요 없으니 메모리 해제
 	palloc_free_page (file_name);
+	//load가 실패하면 -1 리턴(프로세스 종료)
 	if (!success)
 		return -1;
 
-	/* Start switched process. */
+	//열심히 설정한 _if구조체의 내용을 실제 CPU 레지스터에 쏜다.
+	//이 명령어가 실행되는 순간, _if.rip이 가르키는 함수로 점프
+	//동시에 권한 레벨이 Kernel Mode -> User Mode로 바뀐다.
 	do_iret (&_if);
+	//정상적이면 실행되지 않을 코드. -> do_iret으로 유저 세상으로 떠나기 때문
+	//만약 실행되면 잘못된것. 커널 패닉
 	NOT_REACHED ();
 }
 
@@ -316,33 +329,54 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
 		bool writable);
 
-/* Loads an ELF executable from FILE_NAME into the current thread.
- * Stores the executable's entry point into *RIP
- * and its initial stack pointer into *RSP.
- * Returns true if successful, false otherwise. */
-static bool
-load (const char *file_name, struct intr_frame *if_) {
+
+// NOTE : load함수
+//하드디스크에서 file_name에 해당하는 파일(ELF)을 읽습니다.
+//메모리에 코드와 데이터를 복사합니다.
+//스택에 인자를 쌓습니다.(Argument Passing)
+//_if 채우기 : _if.rip -> 프로그램 시작점 주소를 넣습니다.
+//			  _if.rsp -> 아까 인자를 쌓은 스택의 꼭대기 주소를 넣습니다.
+static bool load (const char *file_name, struct intr_frame *if_) {
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
 	off_t file_ofs;
 	bool success = false;
 	int i;
+	
+	//file_name을 자르기 위한 변수
+	char *fn_copy = palloc_get_page(0);
+	char *token;
+	char *save_ptr;
+	char *argv[64];
+	int argc = 0;
 
-	/* Allocate and activate page directory. */
+	strlcpy(fn_copy, file_name, PGSIZE);
+	token = __strtok_r(fn_copy, " ", &save_ptr);
+	argv[0] = token;
+	argc++;
+	while(token != NULL){
+		//NULL로 설정하면 이전에 읽던 부분부터 읽음.
+		token = __strtok_r(NULL, " ", &save_ptr);
+		argv[argc] = token;
+		argc++;
+	}
+
+	//페이지 테이블 생성
 	t->pml4 = pml4_create ();
-	if (t->pml4 == NULL)
-		goto done;
+	if (t->pml4 == NULL) goto done;
+	//CR3 레지스터 교체 -> CPU는 이 페이지 테이블을 써라.
 	process_activate (thread_current ());
 
-	/* Open executable file. */
-	file = filesys_open (file_name);
+	//디스크에서 file_name이라는 파일을 찾아서 열음.
+	//NOTE : 수정 -> file_name을 그대로 넣으면 "ls -l foo"를 찾는게 되어버림.
+	file = filesys_open (argv[0]);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
 
-	/* Read and verify executable header. */
+	//ELF 헤더 검사 -> 파일의 맨 앞부분을 size ehdr만큼 읽어서 검사.
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
 			|| ehdr.e_type != 2
@@ -354,49 +388,61 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
-	/* Read program headers. */
+	//헤더 목차 읽기 -> 세그먼트들의 구역을 알 수 있다. ex) 코드 0x400000, 데이터 0x600400, BSS 0x600600
+	//목차 시작 위치
 	file_ofs = ehdr.e_phoff;
+	//목차 갯수 만큼 반복
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		struct Phdr phdr;
 
 		if (file_ofs < 0 || file_ofs > file_length (file))
 			goto done;
+		//목차 위치로 이동
 		file_seek (file, file_ofs);
 
+		//목차 내용 읽기
 		if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
 			goto done;
 		file_ofs += sizeof phdr;
+		//세그먼트 타입 검사
 		switch (phdr.p_type) {
 			case PT_NULL:
 			case PT_NOTE:
 			case PT_PHDR:
 			case PT_STACK:
 			default:
-				/* Ignore this segment. */
 				break;
 			case PT_DYNAMIC:
 			case PT_INTERP:
 			case PT_SHLIB:
 				goto done;
+			//실제 코드나 변수니까 메모리에 올려달라.
 			case PT_LOAD:
+				//이 파일이 문제가 없나 검사 하는 것 -> 유저 영역에 위치하고 있나?, NULL포인터냐?, 크기 검사.
 				if (validate_segment (&phdr, file)) {
+					//쓰기 권한 확인
 					bool writable = (phdr.p_flags & PF_W) != 0;
+					//~PGMASK로 하면 하위 12비트가 0으로 정렬됨 -> 주소 정렬
+					//파일 내에서 시작 페이지
 					uint64_t file_page = phdr.p_offset & ~PGMASK;
+					//메모리 내에서 시작 페이지
 					uint64_t mem_page = phdr.p_vaddr & ~PGMASK;
+					//페이지 내에서 데이터가 시작하는 오프셋
 					uint64_t page_offset = phdr.p_vaddr & PGMASK;
+					//디스트에서 읽어올 데이터 크기와 디스크엔 없지만 메모리에 0으로 채워야할 공간 크기
 					uint32_t read_bytes, zero_bytes;
+
 					if (phdr.p_filesz > 0) {
-						/* Normal segment.
-						 * Read initial part from disk and zero the rest. */
+						//읽을 바이트와 0으로 채울 바이트를 계산
 						read_bytes = page_offset + phdr.p_filesz;
 						zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
 								- read_bytes);
 					} else {
-						/* Entirely zero.
-						 * Don't read anything from disk. */
+						//파일엔 없지만 메모리엔 필요한 경우 -> 전역변수 초기화
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
+					//메모리에 매핑하는 과정 load_segment -> palloc으로 메모리 할당, file_read로 데이터를 읽고 채우고, memset으로 나머지 채우고 installpage로 페이지테이블에 매핑
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
 						goto done;
@@ -407,21 +453,59 @@ load (const char *file_name, struct intr_frame *if_) {
 		}
 	}
 
-	/* Set up stack. */
+	//유저 스택에 스택을 생성
 	if (!setup_stack (if_))
 		goto done;
 
-	/* Start address. */
+	//가장 처음 실행할 명령어의 주소를 설정
 	if_->rip = ehdr.e_entry;
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	//여기에 if_->R->rsi 이런걸 채워야 한다는건가?
+	if_->R.rdi = argc;
+
+	//진짜 argument 데이터를 집어 넣어줌. rsp는 USER_STACK으로 이미 초기화 되어있음.
+	for(int i = argc-1; i>=0; i--){
+		if_->rsp -= strlen(argv[i])+1;
+		memcpy(if_->rsp, argv[i], strlen(argv[i])+1);
+		argv[i] = (char *)if_->rsp;
+	}
+
+	//8바이트의 배수로 패딩
+	while(if_->rsp % 8 != 0){
+		if_->rsp -= 1;
+		*(uint8_t *)if_->rsp = 0;
+	}
+
+	//argument주소를 넣어주기 전에 주소0값 추가
+	if_->rsp -= 8;
+	*(char **)if_->rsp = 0;
+
+	//argument주소 차례대로 추가
+	for(int i = argc-1; i>=0; i--){
+		if_->rsp -= 8;
+		*(char **)if_->rsp = argv[i];
+	}
+
+	//반송 주소 0을 넣기전 rsi레지스터 설정
+	if_->R.rsi = if_->rsp;
+
+	//반송 주소 0 넣어주고 끝
+	if_->rsp -= 8;
+	*(void **)if_->rsp = 0;
+
 
 	success = true;
 
 done:
 	/* We arrive here whether the load is successful or not. */
 	file_close (file);
+
+	//NOTE : 추가
+	//fn_copy를 다 썼으므로 free시켜줌.
+	palloc_free_page(fn_copy);
+
 	return success;
 }
 

@@ -109,6 +109,9 @@ struct thread {
 	struct list_elem elem_whole;
 	int64_t wakeup_tick;
 
+	//페이지 테이블의 최상위 주소를 담는 포인터
+	uint64_t *pml4;
+
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
