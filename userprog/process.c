@@ -27,45 +27,78 @@ static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
 
-/* General process initializer for initd and other process. */
+/*그룹 1: 핵심 프로세스 관리 (생명주기 관리)
+프로세스의 상태를 바꾸고, 자원을 할당/해제하는 기본적인 관리 작업을 수행
+process_init, process_activate, process_cleanup, process_exit, process_wait 등*/
+
+/*그룹 2: 프로세스 생성과 실행 (프로그램 로딩)
+특정 실행 파일을 읽어 새로운 프로세스로 탄생시키는 과정
+process_create_initd & initd, process_exec, load, setup_stack, load_segment, install_page, valide_segement*/
+
+/*그룹 3: 프로세스 복제 ('fork')
+현재 프로세스와 거의 동일한 복제본을 만드는 fork 시스템 콜을 위한 것
+process_fork, __do_fork, duplicate_pte*/
+
+
+/*
+역할: 프로세스 관련 자료구조를 초기화한다.
+동작: 현재 쓰레드(thread_current())의 프로세스 관련 정보를 초기화한다.
+*/
 static void
 process_init (void) {
 	struct thread *current = thread_current ();
 }
 
-/* Starts the first userland program, called "initd", loaded from FILE_NAME.
- * The new thread may be scheduled (and may even exit)
- * before process_create_initd() returns. Returns the initd's
- * thread id, or TID_ERROR if the thread cannot be created.
- * Notice that THIS SHOULD BE CALLED ONCE. */
+/* 
+역할: Pintos의 최초 사용자 프로세스 ("initd")를 생성한다.
+동작: process_create_initd는 initd라는 커널 쓰레드를 만든다. initd는 실행되자마자 
+process_exec을 호출하여 자기 자신을 첫 번째 사용자 프로세스로 변신시킨다. 
+*/
 tid_t
 process_create_initd (const char *file_name) {
-	char *fn_copy;
-	tid_t tid;
+	char *fn_copy;			//file_name의 복사본을 저장할 포인터
+	tid_t tid;				//새로 생성될 쓰레드의 ID (프로세스 ID의 역할)
 
-	/* Make a copy of FILE_NAME.
-	 * Otherwise there's a race between the caller and load(). */
+	/* FILE_NAME을 복사하는 이유
+	file_name은 이 함수를 호출한 곳(caller)의 메모리 공간에 있을 수 있다.
+	thread_create()는 새 쓰레드를 만들고, 그 쓰레드는 나중에 load() 함수를 호출하여 file_name을 사용한다.
+	만약 caller가 file_name을 load()가 사용하기 전에 변경하거나 해제하면 문제가 발생(race condition)
+	이를 방지하기 위해 안전하게 커널 메모리에 복사본을 만든다. */
+
+	//동작: 커널 메모레에서 4kb (한 페이지)를 할당받고 file_name의 문자열 복사본을 저장한다. '0'플래그는 페이지를 0으로 초기화하지 않겠단 것
 	fn_copy = palloc_get_page (0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
-	strlcpy (fn_copy, file_name, PGSIZE);
+	//file_name 문자열은 fn_copy 공간으로 안전하게 복사한다.
+		strlcpy (fn_copy, file_name, PGSIZE);
 
-	/* Create a new thread to execute FILE_NAME. */
+	
+	/* file_name을 실행할 새 쓰레드를 생선한다. */
+
+	/*동작: 새로운 커널 쓰레드를 생성한다.
+	thread_create(쓰레드 이름, 쓰레드 기본 우선순위, 새로 생성된 쓰레드가 실행할 함수, 함수에게 전달될 인자)*/
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
 }
 
-/* A thread function that launches first user process. */
+/* 첫 번째 사용자 프로세스를 실행시키는 쓰레드 함수 */
 static void
-initd (void *f_name) {
+initd (void *f_name) { //f_name은 process_create_initd에서 전달받은 프로그램 이름 문자열 포인터
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
+	//이 부분은 가상 메모리에서 사용, 보조 페이지 테이블(spt)를 초기화하는 코드
 
+	//현재 쓰레드의 프로세스(이제 곧 프로세스가 될) 관련 정보를 초기화
 	process_init ();
 
+	/*process_exec(f_name): f_name에 해당하는 프로그램을 현재 실행중인 'init'쓰레드 위로 덮어씌우는(load) 작업 시도
+	성공시: process_exec 함수는 성공하면 절대 리턴하지 않음. 대신 do_iret()을 통해 사용자 프로그램의 첫 코드부터 실행 시작,
+	따라서 if문 안으로 돌아오지 않는다.
+	실패시: process_exec가 -1을 반환하는 경우. 최초의 프로세스를 띄우는데 실패한 것은 운영체제 입장에서
+	치명적인 오류이므로, PANIC 매크로를 호출하여 시스템 전체를 중단.*/
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
@@ -200,7 +233,17 @@ process_exec (void *f_name) {
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) {
+process_wait (tid_t child_tid UNUSED) { /*
+	TODO  4. `process_wait(tid)` (`userprog/process.c`)
+
+   * 호출 방식: main 스레드는 process_create_initd로부터 반환받은 tid를 인자로 하여 process_wait를 호출합니다.
+   * 내부 동작 및 상태 변화:
+       1. 자식 찾기: main 스레드는 자신의 자식 리스트(구현 필요)를 순회하여 tid에 해당하는 자식의 struct thread 포인터를 찾습니다.
+       2. 세마포어 대기: 찾은 자식의 struct thread 내부에 있는 "종료 신호"용 세마포어(예: wait_sema)에 대해 sema_down()을 호출합니다.
+       3. 상태 변화: sema_down이 호출되는 순간, main 스레드의 상태는 THREAD_BLOCKED로 변경되고, ready_list에서 제거됩니다. CPU
+          스케줄러는 이제 다른 스레드(아마도 방금 생성된 initd 스레드)를 실행할 것입니다. main 스레드는 자식이 sema_up을 호출해줄 때까지
+          이 sema_down 함수 안에서 영원히 잠들어 있게 됩니다.
+		  */ 
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
@@ -246,23 +289,34 @@ process_cleanup (void) {
 	}
 }
 
-/* Sets up the CPU for running user code in the nest thread.
- * This function is called on every context switch. */
+/* 모든 컨텍스트 스위치시 호출되는 함수.
+다음에 실행될 쓰레드에서 사용자 코드를 실행하기 위해 CPU를 설정한다. */
 void
 process_activate (struct thread *next) {
-	/* Activate thread's page tables. */
+	/* 쓰레드의 페이지 테이블을 활성화한다.
+	1. pm14: 각 프로세스는 자신만의 독립적인 가상 메모리 주소 공간을 가진다.
+	pm14는 이 가상 주소를 실제 물리 주소로 변환하는 '주소 변환표'의 최상의 테이블이다.
+	즉 프로세스 A와 프로세스 V는 같은 가상 주소 0x400000을 사용하더라도,
+	각자의 pm14를 통해 서로 다른 물리 메모리 위치에 연결된다.
+	2. pm14_activate(): CPU의 CR3라는 특별한 제어 레지스터에 next 프로세스의 pm14 주소를 등록하는 역할
+	3. 결과: 이 함수가 실행된 직후부터, CPU는 메모리에 접근할 때 next 프로세스의 주소 변환표(pm14)를 사용한다.
+	이로써 프로세스간의 메모리 공간이 완벽하게 격리된다. */
 	pml4_activate (next->pml4);
 
-	/* Set thread's kernel stack for use in processing interrupts. */
+	/*어떤 프로세스가 실행 중이든, 인터럽트가 발생하면 CPU는 항상 현재 실행중인 프로세스에 할당된 안전한 커널 스택으로 자동전환 */
 	tss_update (next);
 }
 
-/* We load ELF binaries.  The following definitions are taken
- * from the ELF specification, [ELF1], more-or-less verbatim.  */
-
-/* ELF types.  See [ELF1] 1-2. */
+/* WLD 실행 파일의 구조를 해석하기 위한 상수들.
+Pintos가 사용자 프로그램을 메모리에 올리고 실행하려면 그 프로그램 파일이 어떤 형식으로 되어있는지 알아야 하는데
+ELF가 바로 그 표준 형식이다. */
 #define EI_NIDENT 16
 
+
+/*프로그램 헤더: ELF 파일에는 "프로그램 헤더 테이블"이라는 것이 있다. 이 테이블의 각 항목(엔트리)은 실행 파일의
+특정 세그먼트에 대한 정보를 담고 있다. 세그먼트는 코드, 데이터, 스택 등 메모리에 로드될 수 있는 프로그램의 논리적인 부분을 의미한다.*/
+
+/*각 프로그램 헤더는 p_type이라는 필드를 가지며, 이 필드가 해당 세그먼트의 종류를 나타낸다.*/
 #define PT_NULL    0            /* Ignore. */
 #define PT_LOAD    1            /* Loadable segment. */
 #define PT_DYNAMIC 2            /* Dynamic linking info. */
@@ -272,12 +326,14 @@ process_activate (struct thread *next) {
 #define PT_PHDR    6            /* Program header table. */
 #define PT_STACK   0x6474e551   /* Stack segment. */
 
-#define PF_X 1          /* Executable. */
-#define PF_W 2          /* Writable. */
-#define PF_R 4          /* Readable. */
+#define PF_X 1          /* 실행 */
+#define PF_W 2          /* 쓰기 */
+#define PF_R 4          /* 읽기 */
 
-/* Executable header.  See [ELF1] 1-4 to 1-8.
- * This appears at the very beginning of an ELF binary. */
+/* ELF 파일 식별 정보 (16바이트)
+파일의 맨 앞 16바이트를 읽어 이 배열에 저장한다.
+배열의 첫 바이트가 매직 넘버)("\177ELF")와 일치하는지 확인하여
+이 파일이 유효한 ELF 파일인지 가장 먼저 검사하고 64비트용 파일인지 등의 정보도 담겨있다 */
 struct ELF64_hdr {
 	unsigned char e_ident[EI_NIDENT];
 	uint16_t e_type;
@@ -316,33 +372,52 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
 		bool writable);
 
-/* Loads an ELF executable from FILE_NAME into the current thread.
- * Stores the executable's entry point into *RIP
- * and its initial stack pointer into *RSP.
- * Returns true if successful, false otherwise. */
+/* 실행 파일의 설계도(ELF)를 읽어 메모리에 실제로 배치하는 과정 */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
-	struct thread *t = thread_current ();
-	struct ELF ehdr;
-	struct file *file = NULL;
-	off_t file_ofs;
-	bool success = false;
+	struct thread *t = thread_current ();   //현재 실행중인 쓰레드(프로세스)의 정보
+	struct ELF ehdr;						//ELF 헤더 정보를 담을 구조체
+	struct file *file = NULL;				//실행 파일을 가리킬 파일 포인터
+	off_t file_ofs;							//파일 내에서 읽을 위치(오프셋)
+	bool success = false;					//로딩 성공 여부 플래그
 	int i;
 
-	/* Allocate and activate page directory. */
+	/*파싱을 위한 변수 선언*/
+	char line_copy[128];
+    char *token;
+    char *save_ptr;
+    char *argv[64];	//왜 64로 선언할까?
+    int argc = 0;
+
+	strlcpy(line_copy, file_name, sizeof(line_copy));
+	for(token = strtok_r(line_copy, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)){
+		argv[argc] = token;
+		argc ++;
+	}
+
+	if(argc > 0){
+		strlcpy(thread_current()->name, argv[0], sizeof(thread_current()->name));
+	}
+
+	/* 페이지 디렉토리(페이지 테이블)을 할당하고 활성화한다.
+	이것이 새 프로세스를 위한 독립적인 메모리 지도가 된다. */
+
+	//새 프로세스를 위한 최상의 페이지 테이블(pm14)를 생성한다. 지금은 아무것도 없는 빈 지도 상태
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
 		goto done;
+
+	//방금 만든 빈 지도를 CPU에게 사용하라고 알려준다. 이제부터 모든 메모리 접근은 이 새 지도를 통한다.
 	process_activate (thread_current ());
 
-	/* Open executable file. */
-	file = filesys_open (file_name);
+	/* 파일 시스템을 통해 file_name에 해당하는 파일을 연다. */
+	file = filesys_open (argv[0]);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
 
-	/* Read and verify executable header. */
+	/* 실행 파일의 헤더를 읽고 유효한지 검증하는, 파일의 "설계도"가 올바른 형식인지 확인하는 과정이다. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
 			|| ehdr.e_type != 2
@@ -354,7 +429,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
-	/* Read program headers. */
+	/* 프로그램 헤더들을 읽는다. 설계도(ELF 헤더)를 바탕으로, 각 부분(세그먼트)에 대한 상세 정보를 하나씩 확인하는 과정이다.*/
 	file_ofs = ehdr.e_phoff;
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		struct Phdr phdr;
@@ -406,28 +481,60 @@ load (const char *file_name, struct intr_frame *if_) {
 				break;
 		}
 	}
-
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
 
+	
+	if_->rip = ehdr.e_entry;
+	if_->R.rdi = argc;
+
+	for(int i = argc-1; argc>=0; argc--){
+		if_->rsp -= strlen(argv[i]) + 1; 		//NULL만큼 1을 더해줌
+		memcpy(if_->rsp, argv[i], strlen(argv[i])+1);	//argv[i] 전체가 가리키는 문자열을 rsp로 len만큼 복사
+		argv[i] = (char *)if_->rsp;
+	}
+	
+	while(if_->rsp % 8 != 0){
+		if_-> rsp -= 1;
+		*(uint8_t *)if_ -> rsp = 0;
+	}
+
+	if_->rsp -= 8;
+	*(char **)if_->rsp = 0;
+
+	
+	for(int i = argc-1; i>=0; i--){
+		if_->rsp -= 8;
+		*(char **)if_->rsp = argv[i];
+	}
+
+	
+	if_->R.rsi = if_->rsp;
+
+	
+	if_->rsp -= 8;
+	*(void **)if_->rsp = 0;
+
+	
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	
+	
 
 	success = true;
 
 done:
 	/* We arrive here whether the load is successful or not. */
 	file_close (file);
+
+
 	return success;
 }
 
 
-/* Checks whether PHDR describes a valid, loadable segment in
- * FILE and returns true if so, false otherwise. */
+/* ELF 파일에 명시된 특정 세그먼트 정보가 안전하고 유효한지 검증하는 방어 코드 */
 static bool
 validate_segment (const struct Phdr *phdr, struct file *file) {
 	/* p_offset and p_vaddr must have the same page offset. */
@@ -492,18 +599,32 @@ static bool install_page (void *upage, void *kpage, bool writable);
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
+
+ /*
+ load 함수로부터 "어떤 파일의 어느 위치에서 얼마만큼의 데이터를 읽어 어떤 가상 주소에 어떤 권한으로 올려라"
+ struct file *file: 데이터를 읽어올 실행 파일 포인터
+ off_t ofs: file 내에세 데이터를 읽기 시작할 위치(오프셋)
+ uint8_t *upage: 데이터를 올리기 시작할 사용자 가상 주소
+ uint32_t read_bytes: file로부터 읽어야 할 총 데이터의 크기
+ uint32_t zero_bytes: read_bytes를 다 읽은 후 0으로 채워야 할 데이터의 크기
+ bool writable: 이 메모리 영역에 쓰기 권한을 부여할 지 여부
+ */
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+	/*
+	1. read_bytes + zero_bytes(세그먼트의 총 메모리 크기)가 페이지(PGSIZE, 4KB) 크기의 배수여야 함.
+	2. upage(사용자 가상 주소)가 페이지 경계에 정확히 맞춰져 있어야 함
+	3. ofs(파일 오프셋)도 페이지 경계에 맞춰져 있어야 로딩이 단순해짐
+	*/
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
+	//file에서 데이터를 읽기 시작할 위치(ofs)로 파일 포인터를 이동
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
-		/* Do calculate how to fill this page.
-		 * We will read PAGE_READ_BYTES bytes from FILE
-		 * and zero the final PAGE_ZERO_BYTES bytes. */
+		/* 아직 파일에서 읽을 내용이 있거나 0으로 채울 부분이 남았다면 계속 while 루프를 실행 */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
@@ -512,33 +633,40 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		if (kpage == NULL)
 			return false;
 
-		/* Load this page. */
+		/* 데이터를 담을 실제 물리 메모리 한 페이지를 커널로부터 할당. 실패(메모리 부족)하면 false.
+		kpage는 이 물리 페이지를 가리키는 커널 주소 */
 		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
 			palloc_free_page (kpage);
 			return false;
 		}
+
+		/*파일에서 page_read_bytes만큼 데이터를 읽어 방금 할당받은 물리페이지(kpage)에 채운다.*/
+		if (!install_page (upage, kpage, writable)) {
 		memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-		/* Add the page to the process's address space. */
+		/* install_page 함수를 호출하여, 사용자 가상 주소(upage)와 실제 데이터가 담긴 물리 페이지(kpage)를
+		페이지 테이블에 기록하여 연결한다. 이로써 프로세스가 upage 주소에 접근하면 실제로는 kpage에 접근한다.
+		writable 권한도 이 때 설정된다. */
 		if (!install_page (upage, kpage, writable)) {
 			printf("fail\n");
 			palloc_free_page (kpage);
 			return false;
 		}
 
-		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
 	}
 	return true;
 }
-
+		}		
 /* Create a minimal stack by mapping a zeroed page at the USER_STACK */
 static bool
 setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;
 	bool success = false;
+	char cmdline_copy[128];
+	strlcpy()
 
 	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
 	if (kpage != NULL) {
@@ -551,21 +679,16 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 
-/* Adds a mapping from user virtual address UPAGE to kernel
- * virtual address KPAGE to the page table.
- * If WRITABLE is true, the user process may modify the page;
- * otherwise, it is read-only.
- * UPAGE must not already be mapped.
- * KPAGE should probably be a page obtained from the user pool
- * with palloc_get_page().
- * Returns true on success, false if UPAGE is already mapped or
- * if memory allocation fails. */
+/* 앞서 load_segment가 물리 페이지에 데이터 채우기까지 했다면, 가상 주소를 부여하고 등록하는 역할
+*upage: 사용자 프로그램이 사용할 가상 주소(예: 0x4001000)
+*kpage: 실제 데이터가 저장된 물리 페이지를 가리키는 커널 주소 (palloc_get_page로 할당받은 그 주소)
+*bool writable: 이 페이지에 쓰기를 허용할지 아니면 읽기만 허용할지 권한 정보 */
 static bool
 install_page (void *upage, void *kpage, bool writable) {
 	struct thread *t = thread_current ();
 
-	/* Verify that there's not already a page at that virtual
-	 * address, then map our page there. */
+	/* 해당 가상 주소에 이미 매핑된 페이지가 있는지 없는지 확인하고
+	우리의 페이지을 그 곳에 매핑 */
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
