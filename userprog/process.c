@@ -399,21 +399,15 @@ load (const char *file_name, struct intr_frame *if_) {
 	char *token, *save_ptr;
 
 	file_name_copy = palloc_get_page (PAL_ZERO);
-	if (file_name_copy == NULL)
-		goto done;
+	if (file_name_copy == NULL) goto done;
 	strlcpy (file_name_copy, file_name, PGSIZE);
 
-	for (token = strtok_r (file_name_copy, " ", &save_ptr);
-	     token != NULL;
-	     token = strtok_r (NULL, " ", &save_ptr)) {
-		if (argc >= MAX_ARGS) {
-			goto done;
-		}
+	/* 🔥 edward: parse the token */
+	for (token = strtok_r (file_name_copy, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)) {
+		if (argc >= MAX_ARGS) goto done;
 		argv[argc++] = token;
 	}
-
-	if (argc == 0)
-		goto done;
+	if (argc == 0) goto done;
 
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
@@ -421,7 +415,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
-	/* Open executable file. */
+	/* 🔥 edward: open requested ELF file. */
 	file = filesys_open (argv[0]);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", argv[0]);
@@ -483,23 +477,17 @@ load (const char *file_name, struct intr_frame *if_) {
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
-					if (!load_segment (file, file_page, (void *) mem_page, read_bytes, zero_bytes, writable))
-						goto done;
+					if (!load_segment (file, file_page, (void *) mem_page, read_bytes, zero_bytes, writable)) goto done;
 				}
-				else
-					goto done;
+				else goto done;
 				break;
 		}
 	}
 
-	/* Set up stack. */
-	if (!setup_stack (if_))
-		goto done;
+	if (!setup_stack (if_)) goto done; /* 🔥 edward: set up the stack for the process. */
+	if_->rip = ehdr.e_entry; /* 🔥 edward: put the instruction pointer. */
 
-	/* Start address. */
-	if_->rip = ehdr.e_entry;
-
-	/* Set up argument passing. */
+	/* 🔥 edward: pushing arguments */
 	for (i = argc - 1; i >= 0; i--) {
 		size_t arg_len = strlen (argv[i]) + 1;
 		if_->rsp -= arg_len;
@@ -507,23 +495,27 @@ load (const char *file_name, struct intr_frame *if_) {
 		argv_addrs[i] = if_->rsp;
 	}
 
-	/* Word-align the stack to 16 bytes. */
+	/* 🔥 edward: pushing padding for the 16 bytes alignment. */
 	size_t padding = if_->rsp % 16;
 	if (padding) {
 		if_->rsp -= padding;
 		memset ((void *) if_->rsp, 0, padding);
 	}
 
-	/* Null sentinel. */
+	/* 🔥 edward: pushing null sentinel */
 	if_->rsp -= sizeof (uintptr_t);
 	memset ((void *) if_->rsp, 0, sizeof (uintptr_t));
 
+	/* 🔥 edward: */
+	/* 🔥 edward: pushing addresses of arguments */
 	for (i = argc - 1; i >= 0; i--) {
 		if_->rsp -= sizeof (uintptr_t);
 		memcpy ((void *) if_->rsp, &argv_addrs[i], sizeof (uintptr_t));
 	}
+	
+	/* 🔥 edward: not sure if further information is needed */
 	uintptr_t argv_start = if_->rsp;
-
+	
 	if_->rsp -= sizeof (uintptr_t);
 	memcpy ((void *) if_->rsp, &argv_start, sizeof (uintptr_t));
 

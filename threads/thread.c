@@ -568,8 +568,7 @@ mlfqs_update_recent_cpu_all (void) {
 	struct list_elem *e;
 	for (e = list_begin (&whole_list); e != list_end (&whole_list); e = list_next (e)) {
 		struct thread *t = list_entry (e, struct thread, elem_whole);
-		if (t == idle_thread)
-			continue;
+		if (t == idle_thread) continue;
 		int term1 = fp_mul (temp, t->recent_cpu);
 		t->recent_cpu = fp_add_int (term1, t->nice);
 	}

@@ -68,17 +68,15 @@ syscall_handler (struct intr_frame *f) {
 
 int
 write_handler (int fd, const void *buffer, unsigned length) {
-	if (fd < 0)
-		return -1;
-	if (length == 0)
-		return 0;
-
+	if (fd < 0) return -1;
+	if (length == 0) return 0;
 	validate_user_buffer (buffer, length);
 
 	if (fd == STDOUT_FILENO) {
 		putbuf (buffer, length);
 		return (int) length;
 	}
+	/* 🔥 edward: need to handle the write on files */
 	return -1;
 }
 
@@ -103,8 +101,7 @@ static void
 validate_user_buffer (const void *buffer, size_t size) {
 	const uint8_t *ptr = buffer;
 	for (size_t i = 0; i < size; i++) {
-		if (!is_user_vaddr (ptr + i) ||
-				pml4_get_page (thread_current ()->pml4, ptr + i) == NULL)
+		if (!is_user_vaddr (ptr + i) || pml4_get_page (thread_current ()->pml4, ptr + i) == NULL)
 			exit_with_error ();
 	}
 }
