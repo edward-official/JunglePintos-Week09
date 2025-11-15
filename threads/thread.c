@@ -713,6 +713,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->waiting_for = NULL;
 	t->nice = 0;
 	t->recent_cpu = 0;
+	t->exit_status = 0;
 	list_init (&t->donators);
 	t->magic = THREAD_MAGIC;
 	list_push_back (&whole_list, &t->elem_whole);

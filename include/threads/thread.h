@@ -94,6 +94,7 @@ struct thread {
 	int priority;                       /* Priority. */
 	int nice;
 	int recent_cpu;
+	int exit_status;
 
 	int original_priority;
 	struct lock *waiting_for;

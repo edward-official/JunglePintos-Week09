@@ -1,10 +1,14 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <stdint.h>
+#include <stddef.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/init.h"
 #include "threads/loader.h"
-#include "userprog/gdt.h"
+#include "threads/vaddr.h"
+#include "threads/mmu.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
 
@@ -24,6 +28,11 @@ void syscall_handler (struct intr_frame *);
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
+static void halt_handler (void) NO_RETURN;
+static void exit_handler (int status) NO_RETURN;
+static void exit_with_error (void) NO_RETURN;
+static void validate_user_buffer (const void *buffer, size_t size);
+
 void
 syscall_init (void) {
 	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48  |
@@ -39,8 +48,63 @@ syscall_init (void) {
 
 /* The main system call interface */
 void
-syscall_handler (struct intr_frame *f UNUSED) {
-	// TODO: Your implementation goes here.
-	printf ("system call!\n");
+syscall_handler (struct intr_frame *f) {
+	switch (f->R.rax)
+	{
+	case SYS_HALT:
+		halt_handler ();
+		break;
+	case SYS_EXIT:
+		exit_handler ((int) f->R.rdi);
+		break;
+	case SYS_WRITE:
+		f->R.rax = write_handler ((int) f->R.rdi,
+				(const void *) f->R.rsi, (unsigned) f->R.rdx);
+		break;
+	default:
+		exit_with_error ();
+	}
+}
+
+int
+write_handler (int fd, const void *buffer, unsigned length) {
+	if (fd < 0)
+		return -1;
+	if (length == 0)
+		return 0;
+
+	validate_user_buffer (buffer, length);
+
+	if (fd == STDOUT_FILENO) {
+		putbuf (buffer, length);
+		return (int) length;
+	}
+	return -1;
+}
+
+static void
+halt_handler (void) {
+	power_off ();
+}
+
+static void
+exit_handler (int status) {
+	struct thread *curr = thread_current ();
+	curr->exit_status = status;
 	thread_exit ();
+}
+
+static void
+exit_with_error (void) {
+	exit_handler (-1);
+}
+
+static void
+validate_user_buffer (const void *buffer, size_t size) {
+	const uint8_t *ptr = buffer;
+	for (size_t i = 0; i < size; i++) {
+		if (!is_user_vaddr (ptr + i) ||
+				pml4_get_page (thread_current ()->pml4, ptr + i) == NULL)
+			exit_with_error ();
+	}
 }
