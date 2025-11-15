@@ -109,12 +109,12 @@ struct thread {
 	struct list_elem elem_whole;
 	int64_t wakeup_tick;
 
-	//페이지 테이블의 최상위 주소를 담는 포인터
-	uint64_t *pml4;
+	//부모 프로세스에 thread의 종료 상태를 전달하기 위한 변수
+	int exit_status;
 
 
 #ifdef USERPROG
-	/* Owned by userprog/process.c. */
+	//페이지 테이블의 최상위 주소를 담는 포인터
 	uint64_t *pml4;                     /* Page map level 4 */
 #endif
 #ifdef VM

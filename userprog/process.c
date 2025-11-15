@@ -19,10 +19,12 @@
 #include "threads/vaddr.h"
 #include "intrinsic.h"
 #include "include/lib/string.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
 
+static struct semaphore child_sema;
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -43,6 +45,8 @@ tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;
 	tid_t tid;
+
+	sema_init(&child_sema, 0);
 
 	/* Make a copy of FILE_NAME.
 	 * Otherwise there's a race between the caller and load(). */
@@ -212,11 +216,15 @@ int process_exec (void *f_name) {
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
+//NOTE : wait 함수 -> 세마포어를 구현하라..
 int
 process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+
+	sema_down(&child_sema);
+
 	return -1;
 }
 
@@ -228,6 +236,7 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+	sema_up(&child_sema);
 
 	process_cleanup ();
 }
@@ -352,15 +361,19 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 	int argc = 0;
 
 	strlcpy(fn_copy, file_name, PGSIZE);
-	token = __strtok_r(fn_copy, " ", &save_ptr);
+	token = strtok_r(fn_copy, " ", &save_ptr);
 	argv[0] = token;
 	argc++;
 	while(token != NULL){
 		//NULL로 설정하면 이전에 읽던 부분부터 읽음.
-		token = __strtok_r(NULL, " ", &save_ptr);
-		argv[argc] = token;
-		argc++;
+		token = strtok_r(NULL, " ", &save_ptr);
+		if(token != NULL){
+			argv[argc] = token;
+			argc++;
+		}
 	}
+
+	strlcpy(thread_current()->name, argv[0], strlen(argv[0])+1);
 
 	//페이지 테이블 생성
 	t->pml4 = pml4_create ();
@@ -460,8 +473,6 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 	//가장 처음 실행할 명령어의 주소를 설정
 	if_->rip = ehdr.e_entry;
 
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 	//여기에 if_->R->rsi 이런걸 채워야 한다는건가?
 	if_->R.rdi = argc;
 
