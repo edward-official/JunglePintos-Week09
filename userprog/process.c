@@ -485,51 +485,66 @@ load (const char *file_name, struct intr_frame *if_) {
 	if (!setup_stack (if_))
 		goto done;
 
-	
-	if_->rip = ehdr.e_entry;
-	if_->R.rdi = argc;
+/*
+ (높은 주소)
++--------------------------------+ <-- USER_STACK (예: 0x8000000000)
+|                                |
+|         "x\0"                  |
+|         "echo\0"               |  (1. 실제 문자열 데이터)
+|                                |
++--------------------------------+
+|         0 (Padding)            |  (2. 정렬 패딩)
++--------------------------------+
+|         NULL (argv[argc])      |  (3. NULL 포인터)
++--------------------------------+
+|  "x"의 주소 (argv[argc-1])     |
+|         ...                   |
+|  "echo"의 주소 (argv[0])       |  (4. argv 주소들)
++--------------------------------+ <-- if_->R.rsi 가 가리키는 곳 (argv 배열의 시작)
+|  0 (가짜 반환 주소)            |  (5. 가짜 반환 주소)
++--------------------------------+ <-- 최종 if_->rsp 가 가리키는 곳
+*/
+	void *user_stack_addrs[64];
 
-	for(int i = argc-1; argc>=0; argc--){
+	//스택에 데이터 넣기 1단계: 실제 문자열 데이터(ex: "echo", "x")넣기
+	for(int i = argc-1; i>=0; i--){
 		if_->rsp -= strlen(argv[i]) + 1; 		//NULL만큼 1을 더해줌
 		memcpy(if_->rsp, argv[i], strlen(argv[i])+1);	//argv[i] 전체가 가리키는 문자열을 rsp로 len만큼 복사
-		argv[i] = (char *)if_->rsp;
+		user_stack_addrs[i] = if_->rsp;
 	}
 	
+	//스택에 데이터 넣기 2단계: 워드 정렬 맞추기(패딩)
 	while(if_->rsp % 8 != 0){
 		if_-> rsp -= 1;
 		*(uint8_t *)if_ -> rsp = 0;
 	}
 
+	//스택에 데이터 넣기 3단계:: NULL 넣기
 	if_->rsp -= 8;
 	*(char **)if_->rsp = 0;
 
-	
+	//스택에 데이터 넣기 4단계: argv 주소 저장
 	for(int i = argc-1; i>=0; i--){
 		if_->rsp -= 8;
-		*(char **)if_->rsp = argv[i];
+		*(void **)if_->rsp = user_stack_addrs[i];
 	}
 
-	
+	if_->R.rdi = argc;
 	if_->R.rsi = if_->rsp;
 
-	
 	if_->rsp -= 8;
+
+	//스택에 데이터 넣기 5단계: 가짜 반환값 저장
 	*(void **)if_->rsp = 0;
 
-	
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-
-	
-	
 
 	success = true;
 
 done:
 	/* We arrive here whether the load is successful or not. */
 	file_close (file);
-
-
 	return success;
 }
 
