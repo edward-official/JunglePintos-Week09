@@ -119,8 +119,7 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
+	return thread_create (name, PRI_DEFAULT, __do_fork, thread_current ());
 }
 
 #ifndef VM
@@ -224,8 +223,7 @@ process_exec (void *f_name) {
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
-	if (!success)
-		return -1;
+	if (!success) return -1;
 
 	/* Start switched process. */
 	do_iret (&_if);
@@ -506,14 +504,13 @@ load (const char *file_name, struct intr_frame *if_) {
 	if_->rsp -= sizeof (uintptr_t);
 	memset ((void *) if_->rsp, 0, sizeof (uintptr_t));
 
-	/* 🔥 edward: */
 	/* 🔥 edward: pushing addresses of arguments */
 	for (i = argc - 1; i >= 0; i--) {
 		if_->rsp -= sizeof (uintptr_t);
 		memcpy ((void *) if_->rsp, &argv_addrs[i], sizeof (uintptr_t));
 	}
 	
-	/* 🔥 edward: not sure if further information is needed */
+	/* 🔥 edward: not sure if these further information pushes are required */
 	uintptr_t argv_start = if_->rsp;
 	
 	if_->rsp -= sizeof (uintptr_t);
