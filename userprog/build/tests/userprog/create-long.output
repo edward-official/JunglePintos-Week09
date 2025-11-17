@@ -22,16 +22,16 @@ Boot complete.
 Putting 'create-long' into the file system...
 Executing 'create-long':
 (create-long) begin
-create(xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx): 0(create-long) create("x..."): 1
+(create-long) create("x..."): 0
 (create-long) end
 create-long: exit(0)
 Execution of 'create-long' complete.
-Timer: 83 ticks
-Thread: 36 idle ticks, 36 kernel ticks, 12 user ticks
+Timer: 76 ticks
+Thread: 39 idle ticks, 35 kernel ticks, 3 user ticks
 hd0:0: 0 reads, 0 writes
-hd0:1: 85 reads, 268 writes
+hd0:1: 89 reads, 284 writes
 hd1:0: 120 reads, 0 writes
-Console: 1463 characters output
+Console: 940 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

@@ -244,6 +244,17 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	//NOTE : syscall_open 추가
+	t->fdt = palloc_get_multiple(PAL_ZERO, 1);
+	if(t->fdt == NULL){
+		PANIC("Failed to allocate FDT page");
+	}
+
+	t->fdt[0] = (void *)1;
+	t->fdt[1] = (void *)2;
+	t->fdt[2] = (void *)3;
+
+
 	/* Add to run queue. */
 	thread_unblock (t);
 	check_preemption();
@@ -716,6 +727,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 	list_init (&t->donators);
 	t->magic = THREAD_MAGIC;
 	list_push_back (&whole_list, &t->elem_whole);
+
+	t->fdt = NULL;
+
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

@@ -112,6 +112,9 @@ struct thread {
 	//부모 프로세스에 thread의 종료 상태를 전달하기 위한 변수
 	int exit_status;
 
+	//파일 디스크립터 테이블
+	struct file **fdt;
+
 
 #ifdef USERPROG
 	//페이지 테이블의 최상위 주소를 담는 포인터

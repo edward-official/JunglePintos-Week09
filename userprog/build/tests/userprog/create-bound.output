@@ -22,16 +22,16 @@ Boot complete.
 Putting 'create-bound' into the file system...
 Executing 'create-bound':
 (create-bound) begin
-create(quux.dat): 0(create-bound) create("quux.dat"): 1
+(create-bound) create("quux.dat"): 1
 (create-bound) end
 create-bound: exit(0)
 Execution of 'create-bound' complete.
-Timer: 75 ticks
-Thread: 38 idle ticks, 36 kernel ticks, 2 user ticks
+Timer: 80 ticks
+Thread: 39 idle ticks, 38 kernel ticks, 3 user ticks
 hd0:0: 0 reads, 0 writes
-hd0:1: 85 reads, 272 writes
+hd0:1: 107 reads, 284 writes
 hd1:0: 122 reads, 0 writes
-Console: 972 characters output
+Console: 954 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

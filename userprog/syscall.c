@@ -7,6 +7,8 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -47,10 +49,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			power_off();
 			break;
 		case SYS_EXIT:
-			int status = f->R.rdi;
-			thread_current()->exit_status = status;
-			printf("%s: exit(%d)\n", thread_name(), status);
-			thread_exit();
+			syscall_exit(f);
 			break;
 		case SYS_FORK:
 			
@@ -62,17 +61,13 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			
 			break;
 		case SYS_CREATE:
-			char *file = f->R.rdi;
-			size_t initial_size = f->R.rsi;
-
-			// printf("create(%s): %d\n", file, initial_size);
-
+			syscall_create(f);
 			break;
 		case SYS_REMOVE:
 			
 			break;
 		case SYS_OPEN:
-			
+			syscall_open(f);
 			break;
 		case SYS_FILESIZE:
 			
@@ -81,23 +76,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			
 			break;
 		case SYS_WRITE:
-			int fd = f->R.rdi;
-			char *buf = f->R.rsi;
-			size_t size = f->R.rdx;
-
-			// check_address(buf);
-			
-			if(fd == 0){
-				//에러처리
-			}
-			else if(fd == 1) {
-				putbuf(buf, size);
-				f->R.rax = size;
-			}
-			else{
-				//파일 작성?
-			}
-
+			syscall_write(f);
 			break;
 		case SYS_SEEK:
 			
@@ -106,19 +85,95 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			
 			break;
 		case SYS_CLOSE:
-			
+			syscall_close(f);
 			break;
-
-
 	}
 }
 
+void syscall_exit(struct intr_frame *f UNUSED){
+	int status = f->R.rdi;
+	thread_current()->exit_status = status;
+	printf("%s: exit(%d)\n", thread_name(), status);
+	thread_exit();
+}
 
-// void check_address(char *buf){
-// 	if(KERN_BASE <= buf || buf < 0x400000 || buf == NULL){
-// 		exit(-1);
-// 	}
-// 	if(pml4_get_page(thread_current()->pml4, buf) == NULL){
-// 		exit(-1);
-// 	}
-// }
+void syscall_create(struct intr_frame *f UNUSED){
+	char *file = f->R.rdi;
+	unsigned initial_size = f->R.rsi;
+	check_address(f, file);
+	f->R.rax = filesys_create(file, initial_size);
+}
+
+void syscall_open(struct intr_frame *f UNUSED){
+	char *name = (char *)f->R.rdi;
+	check_address(f, name);
+	struct file *open_file = filesys_open (name);
+	if(open_file == NULL){
+		f->R.rax = -1;
+	}
+	else{
+		for(int i=3; i<64; i++){
+			if(thread_current()->fdt[i] == NULL){
+				thread_current()->fdt[i] = open_file;
+				f->R.rax = i;
+				break;
+			}
+			f->R.rax = -1;
+		}
+	}
+}
+
+void syscall_write(struct intr_frame *f UNUSED){
+	int fd = f->R.rdi;
+	char *buf = f->R.rsi;
+	unsigned size = f->R.rdx;
+
+	check_address(f, buf);
+	
+	if(fd == 0){
+		//에러처리
+	}
+	else if(fd == 1) {
+		putbuf(buf, size);
+		f->R.rax = size;
+	}
+	else{
+		//파일 작성?
+	}
+}
+
+void syscall_close(struct intr_frame *f UNUSED){
+
+	int fd = f->R.rdi;
+	struct thread *curr = thread_current();
+
+	if(3<=fd && fd<64){
+
+		struct file *close_file = curr->fdt[fd];
+
+		if(close_file != NULL){
+			file_close(close_file);
+			curr->fdt[fd] = NULL;
+			f->R.rax = 0;
+		}
+		else{
+			f->R.rax = -1;
+		}
+
+	}
+	else{
+		f->R.rax = -1;
+	}
+
+}
+
+void check_address(struct intr_frame *f UNUSED, char *buf){
+	if(buf == NULL || !is_user_vaddr(buf)){
+		f->R.rdi = -1;
+		syscall_exit(f);
+	}
+	if(pml4_get_page(thread_current()->pml4, buf) == NULL){
+		f->R.rdi = -1;
+		syscall_exit(f);
+	}
+}

@@ -236,6 +236,18 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+
+	if(curr->fdt != NULL){
+		for(int i=3; i<64; i++){
+			if(curr->fdt[i] != NULL){
+				file_close(curr->fdt[i]);
+				curr->fdt[i] = NULL;
+			}
+		}
+		
+		palloc_free_page(thread_current()->fdt);
+	}
+
 	sema_up(&child_sema);
 
 	process_cleanup ();
@@ -373,7 +385,7 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 		}
 	}
 
-	strlcpy(thread_current()->name, argv[0], strlen(argv[0])+1);
+	if(argc > 0) strlcpy(thread_current()->name, argv[0], sizeof(thread_current()->name));
 
 	//페이지 테이블 생성
 	t->pml4 = pml4_create ();
