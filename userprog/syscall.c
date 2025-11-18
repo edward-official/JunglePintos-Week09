@@ -103,7 +103,26 @@ syscall_init (void) {
 		bool success = filesys_create(file, size);
         f->R.rax = success;
 	}
+	void syscall_open (struct intr_frame *f){
+		char *file = f->R.rdi;
+		check_address(file, f);
+		struct file *open_file = filesys_open (file);
+		if (open_file == NULL){
+			f->R.rax = -1;
+		}
+		else{
+			for(int i=2; i < FDT_COUNT_LIMIT; i++){
+				if(thread_current()->fd_table[i] == NULL){
+				thread_current()->fd_table[i] = open_file;
+				f->R.rax = i;
+				return;
+			}
+		}
+			f->R.rax = -1; // 루프를 다 돌아도 빈 공간이 없을 경우
+	}
 
+
+	}
 
 void
 syscall_handler (struct intr_frame *f) {
@@ -119,6 +138,11 @@ syscall_handler (struct intr_frame *f) {
 		/*void exit (int status); (인자 1개: status)*/
 		case SYS_EXIT:
 			syscall_exit(f);
+			break;
+
+		/*int open (const char *file)*/
+		case SYS_OPEN:
+			syscall_open(f);
 			break;
 
 		case SYS_FORK:
@@ -163,5 +187,3 @@ syscall_handler (struct intr_frame *f) {
 			break;
 	}
 }
-
-
