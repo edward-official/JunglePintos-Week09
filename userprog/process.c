@@ -123,19 +123,31 @@ initd (void *f_name) {
 	NOT_REACHED ();
 }
 
-/* Clones the current process as `name`. Returns the new process's thread id, or
- * TID_ERROR if the thread cannot be created. */
+/*
+Clones the current process as `name`.
+Returns the new process's thread id, or TID_ERROR if the thread cannot be created.
+*/
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	return thread_create (name, PRI_DEFAULT, __do_fork, thread_current ());
+	struct fork_struct *fs = malloc(sizeof *fs);
+	if(!fs) return TID_ERROR;
+	fs->parent = thread_current();
+	memcpy(&fs->parent_if, if_, sizeof fs->parent_if);
+	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, fs);
+	if(tid == TID_ERROR) free(fs);
+	return tid;
 }
 
 #ifndef VM
-/* Duplicate the parent's address space by passing this function to the
- * pml4_for_each. This is only for the project 2. */
+/*
+Duplicate the parent's address space by passing this function to the pml4_for_each.
+This is only for the project 2.
+*/
 static bool
 duplicate_pte (uint64_t *pte, void *va, void *aux) {
+	/* 🔥 edward
+	*/
 	struct thread *current = thread_current ();
 	struct thread *parent = (struct thread *) aux;
 	void *parent_page;
@@ -143,6 +155,12 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	bool writable;
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	/* 🔥 edward
+	how is that even possible?
+	does user program have any kernel page in their page table?????????
+	"pml4_create" method copies the "base_pml4"(kernel mappings) right into the user process' page table
+	*/
+	// if(is_kernel_vaddr(va)) return idk;
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	parent_page = pml4_get_page (parent->pml4, va);
@@ -163,48 +181,55 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 }
 #endif
 
-/* A thread function that copies parent's execution context.
- * Hint) parent->tf does not hold the userland context of the process.
- *       That is, you are required to pass second argument of process_fork to
- *       this function. */
+/*
+A thread function that copies parent's execution context.
+Hint)
+parent->tf does not hold the userland context of the process. 🔥
+That is, you are required to pass second argument of process_fork to this function.
+*/
 static void
 __do_fork (void *aux) {
+	struct fork_struct *fs = aux;
 	struct intr_frame if_;
-	struct thread *parent = (struct thread *) aux;
+	struct thread *parent = (struct thread *) fs->parent;
 	struct thread *current = thread_current ();
-	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct intr_frame *parent_if = &fs->parent_if; /* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	bool succ = true;
-
+	
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	free(fs);
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
-	if (current->pml4 == NULL)
-		goto error;
-
+	if (current->pml4 == NULL) goto error;
 	process_activate (current);
 #ifdef VM
 	supplemental_page_table_init (&current->spt);
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
 		goto error;
 #else
-	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
+	if (!pml4_for_each (parent->pml4, duplicate_pte, parent)) /* 🔥 edward: copy page table */
 		goto error;
 #endif
 
-	/* TODO: Your code goes here.
-	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
-	 * TODO:       in include/filesys/file.h. Note that parent should not return
-	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent.*/
+/* 
+TODO: Your code goes here.
+Hint)
+To duplicate the file object, use `file_duplicate` in include/filesys/file.h.
+Note that parent should not return from the fork() until this function successfully duplicates the resources of parent.
+*/
+/* 🔥 edward
+uint64_t *pml4;
+struct list file_descriptors;
+int next_fd;
+bool fds_initialized;
+*/
 
 	process_init ();
 
 	/* Finally, switch to the newly created process. */
-	if (succ)
-		do_iret (&if_);
+	if (succ) do_iret (&if_);
 error:
 	thread_exit ();
 }

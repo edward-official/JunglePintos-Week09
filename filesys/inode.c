@@ -231,8 +231,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset) {
  * (Normally a write at end of file would extend the inode, but
  * growth is not yet implemented.) */
 off_t
-inode_write_at (struct inode *inode, const void *buffer_, off_t size,
-		off_t offset) {
+inode_write_at (struct inode *inode, const void *buffer_, off_t size, off_t offset) {
 	const uint8_t *buffer = buffer_;
 	off_t bytes_written = 0;
 	uint8_t *bounce = NULL;

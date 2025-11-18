@@ -99,8 +99,7 @@ syscall_handler (struct intr_frame *f) {
 		f->R.rax = process_wait ((tid_t) f->R.rdi);
 		break;
 	case SYS_CREATE:
-		f->R.rax = create_handler ((const char *) f->R.rdi,
-				(unsigned) f->R.rsi);
+		f->R.rax = create_handler ((const char *) f->R.rdi, (unsigned) f->R.rsi);
 		break;
 	case SYS_REMOVE:
 		f->R.rax = remove_handler ((const char *) f->R.rdi);
@@ -112,12 +111,10 @@ syscall_handler (struct intr_frame *f) {
 		f->R.rax = filesize_handler ((int) f->R.rdi);
 		break;
 	case SYS_READ:
-		f->R.rax = read_handler ((int) f->R.rdi,
-				(void *) f->R.rsi, (unsigned) f->R.rdx);
+		f->R.rax = read_handler ((int) f->R.rdi, (void *) f->R.rsi, (unsigned) f->R.rdx);
 		break;
 	case SYS_WRITE:
-		f->R.rax = write_handler ((int) f->R.rdi,
-				(const void *) f->R.rsi, (unsigned) f->R.rdx);
+		f->R.rax = write_handler ((int) f->R.rdi, (const void *) f->R.rsi, (unsigned) f->R.rdx);
 		break;
 	case SYS_SEEK:
 		seek_handler ((int) f->R.rdi, (unsigned) f->R.rsi);
@@ -220,8 +217,7 @@ static char *
 copy_user_string (const char *str) {
 	validate_user_string (str);
 	char *copy = palloc_get_page (0);
-	if (copy == NULL)
-		return NULL;
+	if (copy == NULL) return NULL;
 	strlcpy (copy, str, PGSIZE);
 	return copy;
 }
@@ -229,8 +225,7 @@ copy_user_string (const char *str) {
 static int
 fork_handler (const char *name, struct intr_frame *f) {
 	char *name_copy = copy_user_string (name);
-	if (name_copy == NULL)
-		return TID_ERROR;
+	if (name_copy == NULL) return TID_ERROR;
 	tid_t tid = process_fork (name_copy, f);
 	palloc_free_page (name_copy);
 	return tid;

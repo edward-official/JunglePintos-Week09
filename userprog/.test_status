@@ -7,14 +7,14 @@ args-multiple PASS
 create-normal PASS
 bad-write FAIL
 open-twice PASS
-exec-missing FAIL
 exec-arg PASS
+exec-missing FAIL
 read-bad-ptr PASS
 create-long PASS
 fork-close FAIL
 fork-boundary FAIL
-rox-multichild FAIL
 create-bound PASS
+rox-multichild FAIL
 rox-child FAIL
 read-normal PASS
 open-empty PASS

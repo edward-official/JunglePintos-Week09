@@ -88,15 +88,14 @@ pml4e_walk (uint64_t *pml4e, const uint64_t va, int create) {
 	return pte;
 }
 
-/* Creates a new page map level 4 (pml4) has mappings for kernel
- * virtual addresses, but none for user virtual addresses.
- * Returns the new page directory, or a null pointer if memory
- * allocation fails. */
+/*
+Creates a new page map level 4 (pml4) has mappings for kernel virtual addresses, but none for user virtual addresses.
+Returns the new page directory, or a null pointer if memory allocation fails.
+*/
 uint64_t *
 pml4_create (void) {
 	uint64_t *pml4 = palloc_get_page (0);
-	if (pml4)
-		memcpy (pml4, base_pml4, PGSIZE);
+	if (pml4) memcpy (pml4, base_pml4, PGSIZE);
 	return pml4;
 }
 
