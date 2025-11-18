@@ -11,7 +11,7 @@ open-empty FAIL
 open-null FAIL
 close-twice FAIL
 args-none PASS
-create-bad-ptr FAIL
+create-bad-ptr PASS
 read-stdout PASS
 read-boundary FAIL
 close-normal FAIL

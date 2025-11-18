@@ -70,7 +70,7 @@ syscall_init (void) {
 
 	
 	void check_address(void *addr, struct intr_frame *f){
-		if(addr == NULL || !is_user_vaddr(addr) ||  pml4_get_page(thread_current()->pml4, addr)){
+		if(addr == NULL || !is_user_vaddr(addr) || pml4_get_page(thread_current()->pml4, addr) == NULL){
 			f->R.rdi = -1;
 			syscall_exit(f);
 		}
