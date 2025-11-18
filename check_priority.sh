@@ -10,6 +10,15 @@ TESTS_TO_RUN=(
     "tests/userprog/args-multiple"
     "tests/userprog/args-none"
     "tests/userprog/args-single"
+    "tests/userprog/halt"
+    "tests/userprog/exit"
+    "tests/userprog/create-normal"
+    "tests/userprog/create-empty"
+    "tests/userprog/create-null"
+    "tests/userprog/create-bad-ptr"
+    "tests/userprog/create-long"
+    "tests/userprog/create-exists"
+    "tests/userprog/create-bound"
 )
 # --- END CONFIGURATION ---
 # 0. 스크립트가 올바른 위치(pintos)에서 실행되었는지 확인
@@ -51,20 +60,20 @@ for TEST_NAME in "${TESTS_TO_RUN[@]}"; do
         # FAIL이 있는지 확인
         if grep -q "FAIL" "$TEST_FILE"; then
             ALL_PASSED=false
-            echo "TEST: $TEST_FILE (FAILED :x:)"
+            echo "TEST: $TEST_FILE (FAILED :❌:)"
             # :별:️ FIX: 상세 로그(output, errors)를 출력하지 않습니다.
         else
-            echo "TEST: $TEST_FILE (PASSED :흰색_확인_표시:)"
+            echo "TEST: $TEST_FILE (PASSED :✅:)"
         fi
     else
         # .result 파일 자체가 생성 안 된 경우 (make 오류)
         ALL_PASSED=false
-        echo "TEST: $TEST_FILE (ERROR :느낌표:️ - Result file not found)"
+        echo "TEST: $TEST_FILE (ERROR :❌:️ - Result file not found)"
     fi
 done
 echo "========================================"
 if $ALL_PASSED; then
-    echo "All specified tests passed! :짠:"
+    echo "All specified tests passed! :✅:"
 else
     echo "Some tests failed or failed to run."
 fi

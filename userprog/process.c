@@ -18,10 +18,13 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+//#include "include/lib/string.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
 
+static struct semaphore child_sema;
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -58,6 +61,8 @@ tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy;			//file_name의 복사본을 저장할 포인터
 	tid_t tid;				//새로 생성될 쓰레드의 ID (프로세스 ID의 역할)
+
+	sema_init(&child_sema, 0);
 
 	/* FILE_NAME을 복사하는 이유
 	file_name은 이 함수를 호출한 곳(caller)의 메모리 공간에 있을 수 있다.
@@ -244,9 +249,12 @@ process_wait (tid_t child_tid UNUSED) { /*
           스케줄러는 이제 다른 스레드(아마도 방금 생성된 initd 스레드)를 실행할 것입니다. main 스레드는 자식이 sema_up을 호출해줄 때까지
           이 sema_down 함수 안에서 영원히 잠들어 있게 됩니다.
 		  */ 
+	
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+
+	sema_down(&child_sema);
 	return -1;
 }
 
@@ -258,7 +266,7 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-
+	sema_up(&child_sema);
 	process_cleanup ();
 }
 
@@ -404,9 +412,10 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	//새 프로세스를 위한 최상의 페이지 테이블(pm14)를 생성한다. 지금은 아무것도 없는 빈 지도 상태
 	t->pml4 = pml4_create ();
-	if (t->pml4 == NULL)
-		goto done;
-
+	if (t->pml4 == NULL){
+		printf("DEBUG: pml4_create() failed\n"); // [추가]
+    	goto done;
+	}
 	//방금 만든 빈 지도를 CPU에게 사용하라고 알려준다. 이제부터 모든 메모리 접근은 이 새 지도를 통한다.
 	process_activate (thread_current ());
 
@@ -414,6 +423,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	file = filesys_open (argv[0]);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
+		printf("DEBUG: filesys_open() failed\n"); // [추가]
 		goto done;
 	}
 
@@ -508,9 +518,10 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	//스택에 데이터 넣기 1단계: 실제 문자열 데이터(ex: "echo", "x")넣기
 	for(int i = argc-1; i>=0; i--){
-		if_->rsp -= strlen(argv[i]) + 1; 		//NULL만큼 1을 더해줌
-		memcpy(if_->rsp, argv[i], strlen(argv[i])+1);	//argv[i] 전체가 가리키는 문자열을 rsp로 len만큼 복사
-		user_stack_addrs[i] = if_->rsp;
+		int len = strlen(argv[i]) + 1;
+		if_->rsp -= len; 		//NULL만큼 1을 더해줌
+		memcpy((void *)if_->rsp, argv[i], strlen(argv[i])+1);	//argv[i] 전체가 가리키는 문자열을 rsp로 len만큼 복사
+		user_stack_addrs[i] = (void *)if_->rsp;
 	}
 	
 	//스택에 데이터 넣기 2단계: 워드 정렬 맞추기(패딩)
@@ -539,7 +550,7 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
-
+	
 	success = true;
 
 done:
@@ -654,16 +665,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			palloc_free_page (kpage);
 			return false;
 		}
-
-		/*파일에서 page_read_bytes만큼 데이터를 읽어 방금 할당받은 물리페이지(kpage)에 채운다.*/
-		if (!install_page (upage, kpage, writable)) {
 		memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
+		
 		/* install_page 함수를 호출하여, 사용자 가상 주소(upage)와 실제 데이터가 담긴 물리 페이지(kpage)를
 		페이지 테이블에 기록하여 연결한다. 이로써 프로세스가 upage 주소에 접근하면 실제로는 kpage에 접근한다.
 		writable 권한도 이 때 설정된다. */
 		if (!install_page (upage, kpage, writable)) {
-			printf("fail\n");
+		
 			palloc_free_page (kpage);
 			return false;
 		}
@@ -674,14 +682,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	}
 	return true;
 }
-		}		
+				
 /* Create a minimal stack by mapping a zeroed page at the USER_STACK */
 static bool
 setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;
 	bool success = false;
-	char cmdline_copy[128];
-	strlcpy()
 
 	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
 	if (kpage != NULL) {
