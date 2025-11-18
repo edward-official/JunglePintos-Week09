@@ -11,7 +11,7 @@ Booting from Hard Disk..Kernel command line: -q -f put wait-twice put child-simp
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  211,763,200 loops/s.
+Calibrating timer...  157,081,600 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -24,18 +24,15 @@ Putting 'child-simple' into the file system...
 Executing 'wait-twice':
 (wait-twice) begin
 (wait-twice) wait(exec()) = -1
-(wait-twice) wait(exec()) = -1
-(wait-twice) end
-wait-twice: exit(0)
 Kernel PANIC at ../../threads/mmu.c:235 in pml4_set_page(): assertion `pg_ofs (kpage) == 0' failed.
-Call stack: 0x80042195fd 0x800420dd4d 0x800421d281 0x800420d663 0x800420d719 0x800420d7c2 0x800420d85e 0x800421d33e 0x80042081a0.
+Call stack: 0x80042195fd 0x800420dd4d 0x800421d2b3 0x800420d663 0x800420d719 0x800420d7c2 0x800420d85e 0x800421d370 0x80042081a0.
 The `backtrace' program can make call stacks useful.
 Read "Backtraces" in the "Debugging Tools" chapter
 of the Pintos documentation for more information.
-Timer: 97 ticks
-Thread: 43 idle ticks, 49 kernel ticks, 5 user ticks
+Timer: 81 ticks
+Thread: 43 idle ticks, 34 kernel ticks, 4 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 112 reads, 510 writes
 hd1:0: 236 reads, 0 writes
-Console: 1376 characters output
+Console: 1308 characters output
 Key

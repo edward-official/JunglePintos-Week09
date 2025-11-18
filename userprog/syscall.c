@@ -143,12 +143,10 @@ write_handler (int fd, const void *buffer, unsigned length) {
 		putbuf (buffer, length);
 		return (int) length;
 	}
-	if (fd == STDIN_FILENO)
-		return -1;
+	if (fd == STDIN_FILENO) return -1;
 
 	struct file_descriptor *desc = fd_lookup (fd);
-	if (desc == NULL)
-		return -1;
+	if (desc == NULL) return -1;
 
 	lock_acquire (&filesys_lock);
 	int result = file_write (desc->file, buffer, length);
@@ -213,8 +211,7 @@ validate_user_string (const char *str) {
 		exit_with_error ();
 	while (true) {
 		validate_user_buffer (str, 1);
-		if (*str == '\0')
-			break;
+		if (*str == '\0') break;
 		str++;
 	}
 }

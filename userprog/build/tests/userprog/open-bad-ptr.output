@@ -26,7 +26,7 @@ Executing 'open-bad-ptr':
 open-bad-ptr: exit(-1)
 Execution of 'open-bad-ptr' complete.
 Timer: 76 ticks
-Thread: 36 idle ticks, 38 kernel ticks, 2 user ticks
+Thread: 37 idle ticks, 36 kernel ticks, 3 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 85 reads, 266 writes
 hd1:0: 119 reads, 0 writes

@@ -24,15 +24,16 @@ Putting 'sample.txt' into the file system...
 Executing 'close-normal':
 (close-normal) begin
 (close-normal) open "sample.txt"
-(close-normal) open "sample.txt": FAILED
-close-normal: exit(1)
+(close-normal) close "sample.txt"
+(close-normal) end
+close-normal: exit(0)
 Execution of 'close-normal' complete.
-Timer: 85 ticks
-Thread: 37 idle ticks, 42 kernel ticks, 6 user ticks
+Timer: 87 ticks
+Thread: 43 idle ticks, 39 kernel ticks, 6 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 116 reads, 280 writes
 hd1:0: 121 reads, 0 writes
-Console: 1032 characters output
+Console: 1044 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

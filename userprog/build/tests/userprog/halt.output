@@ -23,7 +23,7 @@ Putting 'halt' into the file system...
 Executing 'halt':
 (halt) begin
 Timer: 74 ticks
-Thread: 37 idle ticks, 34 kernel ticks, 3 user ticks
+Thread: 32 idle ticks, 39 kernel ticks, 4 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 84 reads, 264 writes
 hd1:0: 118 reads, 0 writes

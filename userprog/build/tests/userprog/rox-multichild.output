@@ -11,7 +11,7 @@ Booting from Hard Disk..Kernel command line: -q -f put rox-multichild put child-
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  157,081,600 loops/s.
+Calibrating timer...  209,510,400 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -24,15 +24,29 @@ Putting 'child-rox' into the file system...
 Executing 'rox-multichild':
 (rox-multichild) begin
 (rox-multichild) open "child-rox"
-(rox-multichild) open "child-rox": FAILED
+(rox-multichild) read "child-rox"
+(rox-multichild) write "child-rox"
+(rox-multichild) exec "child-rox 5"
+(rox-multichild) wait for child: FAILED
 rox-multichild: exit(1)
-Execution of 'rox-multichild' complete.
-Timer: 83 ticks
-Thread: 42 idle ticks, 38 kernel ticks, 3 user ticks
+Page fault at 0: not present error reading page in kernel context.
+Interrupt 0x0e (#PF Page-Fault Exception) at rip=800420d817
+ cr2=0000000000000000 error=               0
+rax 0000000000000000 rbx 0000000000000000 rcx 000000800421d238 rdx 0000000000000000
+rsp 000000800424bea0 rbp 000000800424bed0 rsi 000000800421d238 rdi 0000000000000000
+rip 000000800420d817 r8 0000000000000000  r9 0000000000000000 r10 0000000000000000
+r11 0000000000000000 r12 0000000000000000 r13 0000000000000000 r14 0000000000000000
+r15 0000000000000000 rflags 00000246
+es: 0010 ds: 0010 cs: 0008 ss: 0010
+Kernel PANIC at ../../userprog/exception.c:97 in kill(): Kernel bug - unexpected interrupt in kernel
+Call stack: 0x80042195fd 0x800421e76b 0x800421e8f4 0x800420997b 0x8004209dd3 0x800421d370 0x80042081a0.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 90 ticks
+Thread: 44 idle ticks, 34 kernel ticks, 12 user ticks
 hd0:0: 0 reads, 0 writes
-hd0:1: 117 reads, 546 writes
+hd0:1: 119 reads, 547 writes
 hd1:0: 254 reads, 0 writes
-Console: 1047 characters output
-Keyboard: 0 keys pressed
-Exception: 0 page faults
-Powering off...
+Console: 2050 characters output
+Key

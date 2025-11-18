@@ -24,15 +24,16 @@ Putting 'sample.txt' into the file system...
 Executing 'open-twice':
 (open-twice) begin
 (open-twice) open "sample.txt" once
-(open-twice) open "sample.txt" once: FAILED
-open-twice: exit(1)
+(open-twice) open "sample.txt" again
+(open-twice) end
+open-twice: exit(0)
 Execution of 'open-twice' complete.
-Timer: 80 ticks
-Thread: 39 idle ticks, 36 kernel ticks, 5 user ticks
+Timer: 79 ticks
+Thread: 37 idle ticks, 37 kernel ticks, 5 user ticks
 hd0:0: 0 reads, 0 writes
-hd0:1: 124 reads, 282 writes
+hd0:1: 125 reads, 282 writes
 hd1:0: 122 reads, 0 writes
-Console: 1024 characters output
+Console: 1034 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

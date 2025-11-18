@@ -11,7 +11,7 @@ Booting from Hard Disk..Kernel command line: -q -f put multi-child-fd put sample
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  209,715,200 loops/s.
+Calibrating timer...  209,510,400 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -25,15 +25,25 @@ Putting 'child-close' into the file system...
 Executing 'multi-child-fd':
 (multi-child-fd) begin
 (multi-child-fd) open "sample.txt"
-(multi-child-fd) open "sample.txt": FAILED
-multi-child-fd: exit(1)
-Execution of 'multi-child-fd' complete.
-Timer: 98 ticks
-Thread: 46 idle ticks, 48 kernel ticks, 4 user ticks
+(multi-child-fd) wait(exec()) = -1
+Page fault at 0x8: not present error reading page in kernel context.
+Interrupt 0x0e (#PF Page-Fault Exception) at rip=800421d308
+ cr2=0000000000000008 error=               0
+rax 000000800424bef0 rbx 0000000000000000 rcx 0000000000000018 rdx 0000000000000018
+rsp 000000800424bee0 rbp 000000800424bfd0 rsi 0000000000000008 rdi 000000800424bef0
+rip 000000800421d308 r8 0000000000000000  r9 0000000000000000 r10 0000000000000000
+r11 0000000000000000 r12 0000000000000000 r13 0000000000000000 r14 0000000000000000
+r15 0000000000000000 rflags 00000246
+es: 0010 ds: 0010 cs: 0008 ss: 0010
+Kernel PANIC at ../../userprog/exception.c:97 in kill(): Kernel bug - unexpected interrupt in kernel
+Call stack: 0x80042195fd 0x800421e76b 0x800421e8f4 0x800420997b 0x8004209dd3 0x80042081a0.
+The `backtrace' program can make call stacks useful.
+Read "Backtraces" in the "Debugging Tools" chapter
+of the Pintos documentation for more information.
+Timer: 87 ticks
+Thread: 43 idle ticks, 38 kernel ticks, 6 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 154 reads, 558 writes
 hd1:0: 255 reads, 0 writes
-Console: 1113 characters output
-Keyboard: 0 keys pressed
-Exception: 0 page faults
-Powering off...
+Console: 1969 characters output
+Key

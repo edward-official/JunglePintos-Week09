@@ -28,36 +28,45 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
-static void wait_system_init (void);
+static void waiting_system_init (void);
 
 /* 🔥 edward
-child_wait_sema: to wake parent up
-child_wait_lock: to synchronize
-wait_initialized: to initialize only once
-current_child_tid: to distinguish child
-child_wait_in_use: to check if currently waiting
-child_wait_status: to take status from child
+parent_sleep_aid: to wake parent up
+lock_on_waiting_system: to synchronize
+is_waiting_system_initialized: to initialize only once
+child_tid: to distinguish child
+is_currently_waiting: to check if currently waiting
+child_status: to take status from child
 */
-static struct semaphore child_wait_sema;
-static struct lock child_wait_lock;
-static bool wait_initialized;
-static tid_t current_child_tid = TID_ERROR;
-static bool child_wait_in_use;
-static int child_wait_status;
+static struct semaphore parent_sleep_aid;
+static struct lock lock_on_waiting_system;
+static bool is_waiting_system_initialized;
+static tid_t child_tid = TID_ERROR;
+static bool is_currently_waiting;
+static int child_status;
 
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
 	struct thread *current = thread_current ();
+#ifdef USERPROG
+	// uint64_t *pml4;                     /* Page map level 4 */
+	// struct list file_descriptors;       /* Open file descriptors. */
+	list_init(&current->file_descriptors);
+	// int next_fd;                        /* Next descriptor value. */
+	current->next_fd = 2;
+	// bool fds_initialized;               /* Lazily init descriptor list. */
+	current->fds_initialized = true;
+#endif
 }
 
 static void
-wait_system_init (void) {
+waiting_system_init (void) {
 	enum intr_level old_level = intr_disable ();
-	if (!wait_initialized) {
-		sema_init (&child_wait_sema, 0);
-		lock_init (&child_wait_lock);
-		wait_initialized = true;
+	if (!is_waiting_system_initialized) {
+		sema_init (&parent_sleep_aid, 0);
+		lock_init (&lock_on_waiting_system);
+		is_waiting_system_initialized = true;
 	}
 	intr_set_level (old_level);
 }
@@ -91,10 +100,10 @@ process_create_initd (const char *file_name) {
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	else {
-		wait_system_init ();
-		current_child_tid = tid;
-		child_wait_status = -1;
-		child_wait_in_use = false;
+		waiting_system_init ();
+		child_tid = tid;
+		child_status = -1;
+		is_currently_waiting = false;
 	}
 	intr_set_level (old_level);
 	return tid;
@@ -242,22 +251,22 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid) {
-	wait_system_init ();
-	lock_acquire (&child_wait_lock);
-	if (child_tid != current_child_tid || child_wait_in_use) {
-		lock_release (&child_wait_lock);
+	waiting_system_init ();
+	lock_acquire (&lock_on_waiting_system);
+	if (child_tid != child_tid || is_currently_waiting) {
+		lock_release (&lock_on_waiting_system);
 		return -1;
 	}
-	child_wait_in_use = true;
-	lock_release (&child_wait_lock);
+	is_currently_waiting = true;
+	lock_release (&lock_on_waiting_system);
 
-	sema_down (&child_wait_sema);
+	sema_down (&parent_sleep_aid);
 
-	lock_acquire (&child_wait_lock);
-	int status = child_wait_status;
-	current_child_tid = TID_ERROR;
-	child_wait_in_use = false;
-	lock_release (&child_wait_lock);
+	lock_acquire (&lock_on_waiting_system);
+	int status = child_status;
+	child_tid = TID_ERROR;
+	is_currently_waiting = false;
+	lock_release (&lock_on_waiting_system);
 	return status;
 }
 
@@ -265,16 +274,15 @@ process_wait (tid_t child_tid) {
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
-	if (curr->pml4 != NULL)
-		printf ("%s: exit(%d)\n", curr->name, curr->exit_status);
+	if (curr->pml4 != NULL) printf ("%s: exit(%d)\n", curr->name, curr->exit_status);
 
-	wait_system_init ();
-	lock_acquire (&child_wait_lock);
-	if (curr->tid == current_child_tid) {
-		child_wait_status = curr->exit_status;
-		sema_up (&child_wait_sema);
+	waiting_system_init ();
+	lock_acquire (&lock_on_waiting_system);
+	if (curr->tid == child_tid) {
+		child_status = curr->exit_status;
+		sema_up (&parent_sleep_aid);
 	}
-	lock_release (&child_wait_lock);
+	lock_release (&lock_on_waiting_system);
 
 	process_cleanup ();
 }

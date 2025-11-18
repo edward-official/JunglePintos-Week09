@@ -35,8 +35,8 @@ r15 0000000000000000 rflags 00000216
 es: 001b ds: 001b cs: 0023 ss: 001b
 exec-missing: exit(0)
 Execution of 'exec-missing' complete.
-Timer: 78 ticks
-Thread: 36 idle ticks, 36 kernel ticks, 7 user ticks
+Timer: 80 ticks
+Thread: 39 idle ticks, 36 kernel ticks, 6 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 102 reads, 266 writes
 hd1:0: 119 reads, 0 writes
