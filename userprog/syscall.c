@@ -1,6 +1,7 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "filesys/file.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/loader.h"
@@ -118,11 +119,28 @@ syscall_init (void) {
 				return;
 			}
 		}
-			f->R.rax = -1; // 루프를 다 돌아도 빈 공간이 없을 경우
+			f->R.rax = -1; // 루프를 다 돔
 	}
-
-
 	}
+	void syscall_close (struct intr_frame *f){
+		int fd = f->R.rdi;
+		
+		// fd가 유효한 범위(2 ~ FDT_COUNT_LIMIT-1)에 있는지 확인
+		if(fd < 2 || fd >= FDT_COUNT_LIMIT){
+			return;
+		}
+
+		struct file *file_to_close = thread_current()->fd_table[fd];
+
+		if(file_to_close != NULL){
+			file_close(file_to_close);
+			// fd 테이블의 해당 슬롯을 비워서 재사용 가능하게 함
+			thread_current()->fd_table[fd] = NULL;
+		}
+	}
+		
+
+	
 
 void
 syscall_handler (struct intr_frame *f) {
@@ -143,6 +161,11 @@ syscall_handler (struct intr_frame *f) {
 		/*int open (const char *file)*/
 		case SYS_OPEN:
 			syscall_open(f);
+			break;
+		
+		/*void close (int fd)*/
+		case SYS_CLOSE:
+			syscall_close(f);
 			break;
 
 		case SYS_FORK:
@@ -177,9 +200,6 @@ syscall_handler (struct intr_frame *f) {
 			break;
 		
 		case SYS_TELL:
-			break;
-
-		case SYS_CLOSE:
 			break;
 		
 		default:

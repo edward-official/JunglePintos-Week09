@@ -25,12 +25,12 @@ Executing 'open-missing':
 (open-missing) end
 open-missing: exit(0)
 Execution of 'open-missing' complete.
-Timer: 133 ticks
-Thread: 52 idle ticks, 72 kernel ticks, 11 user ticks
+Timer: 128 ticks
+Thread: 53 idle ticks, 67 kernel ticks, 9 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 102 reads, 266 writes
 hd1:0: 119 reads, 0 writes
-Console: 919 characters output
+Console: 918 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...
