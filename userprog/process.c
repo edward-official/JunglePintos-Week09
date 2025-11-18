@@ -29,6 +29,7 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+static int status_code;
 
 /* General process initializer for initd and other process. */
 static void
@@ -225,7 +226,7 @@ process_wait (tid_t child_tid UNUSED) {
 
 	sema_down(&child_sema);
 
-	return -1;
+	return status_code;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -236,6 +237,8 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
+
+	status_code = curr->exit_status;
 
 	if(curr->fdt != NULL){
 		for(int i=3; i<64; i++){
@@ -249,7 +252,6 @@ process_exit (void) {
 	}
 
 	sema_up(&child_sema);
-
 	process_cleanup ();
 }
 

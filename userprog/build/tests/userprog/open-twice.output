@@ -5,7 +5,8 @@ iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+0138B4A0+012CB4A0 CA00
 Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
 
 
-Booting from Hard Disk..Kernel command line: -q -f put open-twice put sample.txt run open-twice
+Booting from Hard Disk...
+Kernel command line: -q -f put open-twice put sample.txt run open-twice
 0 ~ 9fc00 1
 100000 ~ 13e0000 1
 Pintos booting with: 
@@ -28,8 +29,8 @@ Executing 'open-twice':
 (open-twice) end
 open-twice: exit(0)
 Execution of 'open-twice' complete.
-Timer: 77 ticks
-Thread: 40 idle ticks, 34 kernel ticks, 3 user ticks
+Timer: 84 ticks
+Thread: 41 idle ticks, 39 kernel ticks, 4 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 125 reads, 282 writes
 hd1:0: 122 reads, 0 writes

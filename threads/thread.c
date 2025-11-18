@@ -252,7 +252,6 @@ thread_create (const char *name, int priority,
 
 	t->fdt[0] = (void *)1;
 	t->fdt[1] = (void *)2;
-	t->fdt[2] = (void *)3;
 
 
 	/* Add to run queue. */

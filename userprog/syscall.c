@@ -9,6 +9,7 @@
 #include "intrinsic.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+#include "devices/input.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -52,7 +53,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			syscall_exit(f);
 			break;
 		case SYS_FORK:
-			
+			syscall_fork(f);
 			break;
 		case SYS_EXEC:
 			
@@ -70,10 +71,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			syscall_open(f);
 			break;
 		case SYS_FILESIZE:
-			
+			syscall_filesize(f);
 			break;
 		case SYS_READ:
-			
+			syscall_read(f);
 			break;
 		case SYS_WRITE:
 			syscall_write(f);
@@ -97,6 +98,7 @@ void syscall_exit(struct intr_frame *f UNUSED){
 	thread_exit();
 }
 
+
 void syscall_create(struct intr_frame *f UNUSED){
 	char *file = f->R.rdi;
 	unsigned initial_size = f->R.rsi;
@@ -112,7 +114,7 @@ void syscall_open(struct intr_frame *f UNUSED){
 		f->R.rax = -1;
 	}
 	else{
-		for(int i=3; i<64; i++){
+		for(int i=2; i<64; i++){
 			if(thread_current()->fdt[i] == NULL){
 				thread_current()->fdt[i] = open_file;
 				f->R.rax = i;
@@ -123,22 +125,58 @@ void syscall_open(struct intr_frame *f UNUSED){
 	}
 }
 
+void syscall_filesize(struct intr_frame *f UNUSED){
+	int fd = f->R.rdi;
+	f->R.rax = file_length(thread_current()->fdt[fd]);
+}
+
+void syscall_read(struct intr_frame *f UNUSED){
+	int fd = f->R.rdi;
+	void *buffer = f->R.rsi;
+	unsigned size = f->R.rdx;
+	struct thread *curr = thread_current();
+
+	check_address(f, buffer);
+
+	if(fd == 0){
+		for(unsigned i=0; i<size; i++){
+			((char *)buffer)[i] = input_getc();
+		}
+		f->R.rax = size;
+	}
+	else if(fd >= 2 && fd < 64 && curr->fdt[fd] != NULL){
+		struct file *file = curr->fdt[fd];
+
+		off_t byte = file_read(file, buffer, size);
+
+		f->R.rax = byte;
+	}
+	else{
+		f->R.rax = -1;
+	}
+
+}
+
 void syscall_write(struct intr_frame *f UNUSED){
 	int fd = f->R.rdi;
 	char *buf = f->R.rsi;
 	unsigned size = f->R.rdx;
+	struct thread *curr = thread_current();
 
 	check_address(f, buf);
 	
 	if(fd == 0){
-		//에러처리
+		f->R.rax = -1;
 	}
 	else if(fd == 1) {
 		putbuf(buf, size);
 		f->R.rax = size;
 	}
+	else if(fd >= 2 && fd < 64 && curr->fdt[fd] != NULL){
+		f->R.rax = file_write(curr->fdt[fd], buf, size);
+	}
 	else{
-		//파일 작성?
+		f->R.rax = -1;
 	}
 }
 
@@ -147,7 +185,7 @@ void syscall_close(struct intr_frame *f UNUSED){
 	int fd = f->R.rdi;
 	struct thread *curr = thread_current();
 
-	if(3<=fd && fd<64){
+	if(2<=fd && fd<64){
 
 		struct file *close_file = curr->fdt[fd];
 
