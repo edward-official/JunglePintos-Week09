@@ -212,8 +212,7 @@ thread_print_stats (void) {
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
 tid_t
-thread_create (const char *name, int priority,
-		thread_func *function, void *aux) {
+thread_create (const char *name, int priority, thread_func *function, void *aux) {
 	struct thread *t;
 	tid_t tid;
 
@@ -568,8 +567,7 @@ mlfqs_update_recent_cpu_all (void) {
 	struct list_elem *e;
 	for (e = list_begin (&whole_list); e != list_end (&whole_list); e = list_next (e)) {
 		struct thread *t = list_entry (e, struct thread, elem_whole);
-		if (t == idle_thread)
-			continue;
+		if (t == idle_thread) continue;
 		int term1 = fp_mul (temp, t->recent_cpu);
 		t->recent_cpu = fp_add_int (term1, t->nice);
 	}
@@ -713,6 +711,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->waiting_for = NULL;
 	t->nice = 0;
 	t->recent_cpu = 0;
+	t->exit_status = 0;
 	list_init (&t->donators);
 	t->magic = THREAD_MAGIC;
 	list_push_back (&whole_list, &t->elem_whole);

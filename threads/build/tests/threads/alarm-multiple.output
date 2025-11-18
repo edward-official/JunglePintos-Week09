@@ -5,13 +5,14 @@ iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+0138B4A0+012CB4A0 CA00
 Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
 
 
-Booting from Hard Disk..Kernel command line: -q run alarm-multiple
+Booting from Hard Disk...
+Kernel command line: -q run alarm-multiple
 0 ~ 9fc00 1
 100000 ~ 13e0000 1
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  209,510,400 loops/s.
+Calibrating timer...  209,715,200 loops/s.
 Boot complete.
 Executing 'alarm-multiple':
 (alarm-multiple) begin
@@ -57,8 +58,8 @@ Executing 'alarm-multiple':
 (alarm-multiple) thread 4: duration=50, iteration=7, product=350
 (alarm-multiple) end
 Execution of 'alarm-multiple' complete.
-Timer: 591 ticks
-Thread: 550 idle ticks, 41 kernel ticks, 0 user ticks
+Timer: 600 ticks
+Thread: 550 idle ticks, 50 kernel ticks, 0 user ticks
 Console: 2995 characters output
 Keyboard: 0 keys pressed
 Powering off...

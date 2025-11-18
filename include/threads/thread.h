@@ -10,6 +10,7 @@
 #endif
 
 struct lock;
+struct file;
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -94,6 +95,7 @@ struct thread {
 	int priority;                       /* Priority. */
 	int nice;
 	int recent_cpu;
+	int exit_status;
 
 	int original_priority;
 	struct lock *waiting_for;
@@ -113,6 +115,9 @@ struct thread {
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
+	struct list file_descriptors;       /* Open file descriptors. */
+	int next_fd;                        /* Next descriptor value. */
+	bool fds_initialized;               /* Lazily init descriptor list. */
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
