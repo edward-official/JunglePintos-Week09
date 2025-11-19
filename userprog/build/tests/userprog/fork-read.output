@@ -13,7 +13,7 @@ Pintos booting with:
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
 Calibrating timer...  261,734,400 loops/s.
 hd0: unexpected interrupt
-hd0:0: detected 329 sector (164 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
 hd1: unexpected interrupt
 hd1:0: detected 128 sector (64 kB) disk, model "QEMU HARDDISK", serial "QM00003"
@@ -24,16 +24,20 @@ Putting 'sample.txt' into the file system...
 Executing 'fork-read':
 (fork-read) begin
 (fork-read) open "sample.txt"
+(fork-read) child run
+(fork-read) Child: pintos is funny!
+(fork-read) end
+child: exit(0)
 (fork-read) Parent success
 (fork-read) end
 fork-read: exit(0)
 Execution of 'fork-read' complete.
-Timer: 82 ticks
-Thread: 40 idle ticks, 38 kernel ticks, 4 user ticks
+Timer: 85 ticks
+Thread: 41 idle ticks, 39 kernel ticks, 5 user ticks
 hd0:0: 0 reads, 0 writes
-hd0:1: 123 reads, 294 writes
+hd0:1: 124 reads, 294 writes
 hd1:0: 128 reads, 0 writes
-Console: 1010 characters output
+Console: 1099 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

@@ -253,6 +253,9 @@ thread_create (const char *name, int priority,
 	t->fdt[0] = (void *)1;
 	t->fdt[1] = (void *)2;
 
+	//NOTE: 부모 쓰레드에 자식 쓰레드 elem를 넣어주기 위한 푸쉬
+	list_push_back(&thread_current()->child_list, &t->elem_for_parent);
+	sema_init(&t->child_sema, 0);
 
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -728,6 +731,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	list_push_back (&whole_list, &t->elem_whole);
 
 	t->fdt = NULL;
+
+	list_init(&t->child_list);
 
 }
 

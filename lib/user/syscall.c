@@ -1,5 +1,6 @@
 #include <syscall.h>
 #include <stdint.h>
+#include "userprog/syscall.h"
 #include "../syscall-nr.h"
 
 __attribute__((always_inline))

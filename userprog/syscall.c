@@ -10,9 +10,24 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "devices/input.h"
+#include "userprog/process.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
+void syscall_halt(struct intr_frame *f);
+void syscall_exit(struct intr_frame *f);
+void syscall_fork(struct intr_frame *f);
+void syscall_exec(struct intr_frame *f);
+void syscall_wait(struct intr_frame *f);
+void syscall_create(struct intr_frame *f);
+void syscall_remove(struct intr_frame *f);
+void syscall_open(struct intr_frame *f);
+void syscall_filesize(struct intr_frame *f);
+void syscall_read(struct intr_frame *f);
+void syscall_write(struct intr_frame *f);
+void syscall_seek(struct intr_frame *f);
+void syscall_tell(struct intr_frame *f);
+void syscall_close(struct intr_frame *f);
 
 /* System call.
  *
@@ -42,7 +57,7 @@ syscall_init (void) {
 
 /* The main system call interface */
 void
-syscall_handler (struct intr_frame *f UNUSED) {
+syscall_handler (struct intr_frame *f) {
 	int sys_case = f->R.rax;
 
 	switch(sys_case){
@@ -56,10 +71,10 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			syscall_fork(f);
 			break;
 		case SYS_EXEC:
-			
+			syscall_exec(f);
 			break;
 		case SYS_WAIT:
-			
+			syscall_wait(f);
 			break;
 		case SYS_CREATE:
 			syscall_create(f);
@@ -91,27 +106,56 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	}
 }
 
-void syscall_exit(struct intr_frame *f UNUSED){
+void syscall_exit(struct intr_frame *f){
 	int status = f->R.rdi;
 	thread_current()->exit_status = status;
 	printf("%s: exit(%d)\n", thread_name(), status);
 	thread_exit();
 }
 
+void syscall_fork(struct intr_frame *f){
+	char *name = f->R.rdi;
 
-void syscall_create(struct intr_frame *f UNUSED){
+	check_address(f, name);
+
+	tid_t return_fork = process_fork(name, f);
+	if(return_fork == TID_ERROR){
+		f->R.rax = TID_ERROR;
+	}
+	else{
+		f->R.rax = return_fork;
+	}
+}
+
+void syscall_exec(struct intr_frame *f){
+	char *file = f->R.rdi;
+	check_address(f, file);
+	int result = process_exec(file);
+	if(result == -1){
+		f->R.rdi = -1;
+		syscall_exit(f);
+	}
+}
+
+void syscall_wait(struct intr_frame *f){
+	pid_t pid = f->R.rdi;
+	f->R.rax = process_wait(pid);
+}
+
+void syscall_create(struct intr_frame *f){
 	char *file = f->R.rdi;
 	unsigned initial_size = f->R.rsi;
 	check_address(f, file);
 	f->R.rax = filesys_create(file, initial_size);
 }
 
-void syscall_open(struct intr_frame *f UNUSED){
+void syscall_open(struct intr_frame *f){
 	char *name = (char *)f->R.rdi;
 	check_address(f, name);
 	struct file *open_file = filesys_open (name);
+	f->R.rax = -1;
 	if(open_file == NULL){
-		f->R.rax = -1;
+		return;
 	}
 	else{
 		for(int i=2; i<64; i++){
@@ -120,17 +164,16 @@ void syscall_open(struct intr_frame *f UNUSED){
 				f->R.rax = i;
 				break;
 			}
-			f->R.rax = -1;
 		}
 	}
 }
 
-void syscall_filesize(struct intr_frame *f UNUSED){
+void syscall_filesize(struct intr_frame *f){
 	int fd = f->R.rdi;
 	f->R.rax = file_length(thread_current()->fdt[fd]);
 }
 
-void syscall_read(struct intr_frame *f UNUSED){
+void syscall_read(struct intr_frame *f){
 	int fd = f->R.rdi;
 	void *buffer = f->R.rsi;
 	unsigned size = f->R.rdx;
@@ -157,7 +200,7 @@ void syscall_read(struct intr_frame *f UNUSED){
 
 }
 
-void syscall_write(struct intr_frame *f UNUSED){
+void syscall_write(struct intr_frame *f){
 	int fd = f->R.rdi;
 	char *buf = f->R.rsi;
 	unsigned size = f->R.rdx;
@@ -180,7 +223,7 @@ void syscall_write(struct intr_frame *f UNUSED){
 	}
 }
 
-void syscall_close(struct intr_frame *f UNUSED){
+void syscall_close(struct intr_frame *f){
 
 	int fd = f->R.rdi;
 	struct thread *curr = thread_current();
@@ -205,7 +248,7 @@ void syscall_close(struct intr_frame *f UNUSED){
 
 }
 
-void check_address(struct intr_frame *f UNUSED, char *buf){
+void check_address(struct intr_frame *f, char *buf){
 	if(buf == NULL || !is_user_vaddr(buf)){
 		f->R.rdi = -1;
 		syscall_exit(f);
