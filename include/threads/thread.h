@@ -11,6 +11,9 @@
 
 struct lock;
 struct file;
+#ifdef USERPROG
+struct wait_status;
+#endif
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -101,7 +104,7 @@ struct thread {
 	struct lock *waiting_for;
 	struct list donators;
 	/* 🔥 edward
-	list elements must be removed entirely somewhere
+	list elements must be removed somewhere
 	- elem: schedule(through destruction_req using def)
 	- elem_for_donators: thread_remove_lock_donations
 	- elem_whole: thread_exit
@@ -118,6 +121,9 @@ struct thread {
 	struct list file_descriptors;       /* Open file descriptors. */
 	int next_fd;                        /* Next descriptor value. */
 	bool fds_initialized;               /* Lazily init descriptor list. */
+	struct list children;               /* Child wait statuses. */
+	bool children_initialized;          /* Tracks list initialization. */
+	struct wait_status *wait_status;    /* Synchronization with parent. */
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

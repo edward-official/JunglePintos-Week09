@@ -220,14 +220,18 @@ pml4_get_page (uint64_t *pml4, const void *uaddr) {
 	return NULL;
 }
 
-/* Adds a mapping in page map level 4 PML4 from user virtual page
- * UPAGE to the physical frame identified by kernel virtual address KPAGE.
- * UPAGE must not already be mapped. KPAGE should probably be a page obtained
- * from the user pool with palloc_get_page().
- * If WRITABLE is true, the new page is read/write;
- * otherwise it is read-only.
- * Returns true if successful, false if memory allocation
- * failed. */
+/* 
+Adds a mapping in PML4 [from user virtual page UPAGE] [to the physical frame] identified by kernel virtual address KPAGE.
+UPAGE must not already be mapped.
+KPAGE should probably be a page obtained from the user pool with palloc_get_page().
+If WRITABLE is true, the new page is read/write, otherwise it is read-only.
+Returns true if successful, false if memory allocation failed.
+🔥 edward
+pml4: address of destination page table (user)
+upage: virtual address for a destination page table (user)
+kpage: virtual address for a origin page table (kernel)
+rw: boolean value which tells if the page is writable or not
+*/
 bool
 pml4_set_page (uint64_t *pml4, void *upage, void *kpage, bool rw) {
 	ASSERT (pg_ofs (upage) == 0);
@@ -237,8 +241,7 @@ pml4_set_page (uint64_t *pml4, void *upage, void *kpage, bool rw) {
 
 	uint64_t *pte = pml4e_walk (pml4, (uint64_t) upage, 1);
 
-	if (pte)
-		*pte = vtop (kpage) | PTE_P | (rw ? PTE_W : 0) | PTE_U;
+	if (pte) *pte = vtop (kpage) | PTE_P | (rw ? PTE_W : 0) | PTE_U;
 	return pte != NULL;
 }
 

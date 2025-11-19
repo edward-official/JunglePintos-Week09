@@ -19,6 +19,8 @@
 #include "threads/vaddr.h"
 #include "threads/loader.h"
 #include "threads/synch.h"
+#include "threads/malloc.h"
+#include "userprog/syscall.h"
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -26,49 +28,96 @@
 
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
-static void initd (void *f_name);
+static void initd (void *aux);
 static void __do_fork (void *);
-static void waiting_system_init (void);
+static struct wait_status *wait_status_create (void);
+static void wait_status_release (struct wait_status *ws);
+static void add_child_wait_status (struct thread *parent, struct wait_status *ws);
+static struct wait_status *remove_child_wait_status (struct thread *parent, tid_t child_tid);
+static void release_child_waits (struct thread *t);
 
-/* 🔥 edward
-parent_sleep_aid: to wake parent up
-lock_on_waiting_system: to synchronize
-is_waiting_system_initialized: to initialize only once
-child_tid: to distinguish child
-is_currently_waiting: to check if currently waiting
-child_status: to take status from child
+struct initd_args {
+	char *file_name;
+	struct wait_status *wait_status;
+};
+
+/*
+General process initializer for initd and other process.
+🔥 edward: initialize struct of current thread
 */
-static struct semaphore parent_sleep_aid;
-static struct lock lock_on_waiting_system;
-static bool is_waiting_system_initialized;
-static tid_t child_tid = TID_ERROR;
-static bool is_currently_waiting;
-static int child_status;
-
-/* General process initializer for initd and other process. */
 static void
 process_init (void) {
 	struct thread *current = thread_current ();
 #ifdef USERPROG
-	// uint64_t *pml4;                     /* Page map level 4 */
-	// struct list file_descriptors;       /* Open file descriptors. */
-	list_init(&current->file_descriptors);
-	// int next_fd;                        /* Next descriptor value. */
-	current->next_fd = 2;
-	// bool fds_initialized;               /* Lazily init descriptor list. */
-	current->fds_initialized = true;
+	if (!current->fds_initialized) {
+		list_init(&current->file_descriptors);
+		current->next_fd = 2;
+		current->fds_initialized = true;
+	}
+	if (!current->children_initialized) {
+		list_init(&current->children);
+		current->children_initialized = true;
+	}
 #endif
 }
 
+static struct wait_status *
+wait_status_create (void) {
+	struct wait_status *ws = malloc (sizeof *ws);
+	if (ws == NULL) return NULL;
+	sema_init (&ws->sema, 0);
+	lock_init (&ws->lock);
+	ws->tid = TID_ERROR;
+	ws->exit_code = -1;
+	ws->ref_cnt = 2;
+	ws->exited = false;
+	return ws;
+}
+
+/* 🔥 edward: decrease reference by 1 and free "ws" when "ref_cnt == 0" */
 static void
-waiting_system_init (void) {
-	enum intr_level old_level = intr_disable ();
-	if (!is_waiting_system_initialized) {
-		sema_init (&parent_sleep_aid, 0);
-		lock_init (&lock_on_waiting_system);
-		is_waiting_system_initialized = true;
+wait_status_release (struct wait_status *ws) {
+	bool free_ws = false;
+	lock_acquire (&ws->lock);
+	ASSERT (ws->ref_cnt > 0);
+	ws->ref_cnt--;
+	if (ws->ref_cnt == 0) free_ws = true;
+	lock_release (&ws->lock);
+	if (free_ws) free (ws);
+}
+
+/* 🔥 edward: put "ws" into list(parent's children list) */
+static void
+add_child_wait_status (struct thread *parent, struct wait_status *ws) {
+	if (!parent->children_initialized) {
+		list_init (&parent->children);
+		parent->children_initialized = true;
 	}
-	intr_set_level (old_level);
+	list_push_back (&parent->children, &ws->elem);
+}
+
+/* 🔥 remove the given child from the list */
+static struct wait_status *
+remove_child_wait_status (struct thread *parent, tid_t child_tid) {
+	if (!parent->children_initialized) return NULL;
+	for (struct list_elem *e = list_begin (&parent->children); e != list_end (&parent->children); e = list_next (e)) {
+		struct wait_status *ws = list_entry (e, struct wait_status, elem);
+		if (ws->tid == child_tid) {
+			list_remove (e);
+			return ws;
+		}
+	}
+	return NULL;
+}
+
+/* 🔥 edward: delist every child left on the list and decrease the following "ref_cnt" of the wait_status struct object */
+static void
+release_child_waits (struct thread *t) {
+	if (!t->children_initialized) return;
+	while (!list_empty (&t->children)) {
+		struct wait_status *ws = list_entry (list_pop_front (&t->children), struct wait_status, elem);
+		wait_status_release (ws);
+	}
 }
 
 /* Starts the first userland program, called "initd", loaded from FILE_NAME.
@@ -78,48 +127,61 @@ waiting_system_init (void) {
  * Notice that THIS SHOULD BE CALLED ONCE. */
 tid_t
 process_create_initd (const char *file_name) {
-	char *fn_copy;
-	tid_t tid;
-
-	/* Make a copy of FILE_NAME.
-	 * Otherwise there's a race between the caller and load(). */
-	fn_copy = palloc_get_page (0);
-	if (fn_copy == NULL)
+	process_init ();
+	struct initd_args *args = malloc (sizeof *args);
+	if (args == NULL) return TID_ERROR;
+	args->wait_status = wait_status_create ();
+	if (args->wait_status == NULL) {
+		free (args);
 		return TID_ERROR;
+	}
+
+	char *fn_copy = palloc_get_page (0); /* Make a copy of FILE_NAME. Otherwise there's a race between the caller and load(). */
+	if (fn_copy == NULL) {
+		wait_status_release (args->wait_status);
+		wait_status_release (args->wait_status);
+		free (args);
+		return TID_ERROR;
+	}
 	strlcpy (fn_copy, file_name, PGSIZE);
+	args->file_name = fn_copy;
 
 	char thread_name[16];
 	strlcpy (thread_name, file_name, sizeof thread_name);
 	char *space = strchr (thread_name, ' ');
-	if (space != NULL)
-		*space = '\0';
+	if (space != NULL) *space = '\0';
 
 	enum intr_level old_level = intr_disable ();
-	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (thread_name, PRI_DEFAULT, initd, fn_copy);
-	if (tid == TID_ERROR)
+	tid_t tid = thread_create (thread_name, PRI_DEFAULT, initd, args); /* Create a new thread to execute FILE_NAME. */
+	if (tid == TID_ERROR) {
+		intr_set_level (old_level);
 		palloc_free_page (fn_copy);
-	else {
-		waiting_system_init ();
-		child_tid = tid;
-		child_status = -1;
-		is_currently_waiting = false;
+		wait_status_release (args->wait_status);
+		wait_status_release (args->wait_status);
+		free (args);
+		return TID_ERROR;
 	}
+	args->wait_status->tid = tid;
+	add_child_wait_status (thread_current (), args->wait_status);
 	intr_set_level (old_level);
 	return tid;
 }
 
 /* A thread function that launches first user process. */
 static void
-initd (void *f_name) {
+initd (void *aux) {
+	struct initd_args *args = aux;
+	struct wait_status *wait_status = args->wait_status;
+	char *file_name = args->file_name;
+	free (args);
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
 
+	thread_current ()->wait_status = wait_status;
 	process_init ();
 
-	if (process_exec (f_name) < 0)
-		PANIC("Fail to launch initd\n");
+	if (process_exec (file_name) < 0) PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
 }
 
@@ -128,15 +190,51 @@ Clones the current process as `name`.
 Returns the new process's thread id, or TID_ERROR if the thread cannot be created.
 */
 tid_t
-process_fork (const char *name, struct intr_frame *if_ UNUSED) {
-	/* Clone current thread to new thread.*/
+process_fork (const char *name, struct intr_frame *if_) {
+	process_init ();
+	
+	/* 🔥 edward: make fork structure */
 	struct fork_struct *fs = malloc(sizeof *fs);
 	if(!fs) return TID_ERROR;
+	fs->wait_status = wait_status_create ();
+	if (fs->wait_status == NULL) {
+		free (fs);
+		return TID_ERROR;
+	}
+	
+	/* 🔥 edward: set up current thread */
 	fs->parent = thread_current();
 	memcpy(&fs->parent_if, if_, sizeof fs->parent_if);
+	sema_init(&fs->semaphore, 0);
+	fs->success = false;
+
+	/* 🔥 edward: fork */
+	enum intr_level old_level = intr_disable (); /* 🔥 edward: protection for fork struct */
 	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, fs);
-	if(tid == TID_ERROR) free(fs);
-	return tid;
+
+	if(tid == TID_ERROR) { /* 🔥 edward: in case of creation failure */
+		intr_set_level (old_level);
+		/* 🔥 edward: parent + child */
+		wait_status_release (fs->wait_status);
+		wait_status_release (fs->wait_status);
+		free(fs);
+		return TID_ERROR;
+	}
+
+	/* 🔥 edward: enlist the child to the list of parent thread struct */
+	fs->wait_status->tid = tid;
+	add_child_wait_status (thread_current (), fs->wait_status);
+	intr_set_level (old_level);
+
+	sema_down(&fs->semaphore); /* 🔥 edward: wait for child to wake it up */
+	if(fs->success) {
+		free(fs);
+		return tid;
+	}
+	remove_child_wait_status (thread_current (), tid);
+	wait_status_release (fs->wait_status);
+	free(fs);
+	return TID_ERROR;
 }
 
 #ifndef VM
@@ -147,6 +245,9 @@ This is only for the project 2.
 static bool
 duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	/* 🔥 edward
+	pte: parent's page table entry.
+	va: page address where parent's pte points at.
+	aux: currently thread struct pointer of parent thread.
 	*/
 	struct thread *current = thread_current ();
 	struct thread *parent = (struct thread *) aux;
@@ -154,28 +255,20 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	void *newpage;
 	bool writable;
 
-	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
 	/* 🔥 edward
 	how is that even possible?
 	does user program have any kernel page in their page table?????????
 	"pml4_create" method copies the "base_pml4"(kernel mappings) right into the user process' page table
 	*/
-	// if(is_kernel_vaddr(va)) return idk;
-
-	/* 2. Resolve VA from the parent's page map level 4. */
-	parent_page = pml4_get_page (parent->pml4, va);
-
-	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
-	 *    TODO: NEWPAGE. */
-
-	/* 4. TODO: Duplicate parent's page to the new page and
-	 *    TODO: check whether parent's page is writable or not (set WRITABLE
-	 *    TODO: according to the result). */
-
-	/* 5. Add new page to child's page table at address VA with WRITABLE
-	 *    permission. */
-	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
-		/* 6. TODO: if fail to insert page, do error handling. */
+	if(is_kernel_vaddr(va)) return true; /* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	parent_page = pml4_get_page (parent->pml4, va); /* 2. Resolve VA from the parent's page map level 4. */
+	newpage = palloc_get_page(PAL_USER); /* 3. TODO: Allocate new PAL_USER page for the child and set result to NEWPAGE. */
+	if(!newpage) return false;
+	memcpy(newpage, parent_page, PGSIZE); /* 4. TODO: Duplicate parent's page to the new page and check whether parent's page is writable or not (set WRITABLE according to the result). */
+	writable = is_writable(pte);
+	if (!pml4_set_page (current->pml4, va, newpage, writable)) { /* 5. Add new page to child's page table at address VA with WRITABLE permission. */
+		palloc_free_page(newpage); /* 6. TODO: if fail to insert page, do error handling. */
+		return false;
 	}
 	return true;
 }
@@ -193,12 +286,12 @@ __do_fork (void *aux) {
 	struct intr_frame if_;
 	struct thread *parent = (struct thread *) fs->parent;
 	struct thread *current = thread_current ();
+	current->wait_status = fs->wait_status;
 	struct intr_frame *parent_if = &fs->parent_if; /* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	bool succ = true;
-	
+
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
-	free(fs);
+	if_.R.rax = 0;
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
@@ -206,31 +299,19 @@ __do_fork (void *aux) {
 	process_activate (current);
 #ifdef VM
 	supplemental_page_table_init (&current->spt);
-	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
-		goto error;
+	if (!supplemental_page_table_copy (&current->spt, &parent->spt)) goto error;
 #else
-	if (!pml4_for_each (parent->pml4, duplicate_pte, parent)) /* 🔥 edward: copy page table */
-		goto error;
+	if (!pml4_for_each (parent->pml4, duplicate_pte, parent)) goto error; /* 🔥 edward: copy page table */
 #endif
 
-/* 
-TODO: Your code goes here.
-Hint)
-To duplicate the file object, use `file_duplicate` in include/filesys/file.h.
-Note that parent should not return from the fork() until this function successfully duplicates the resources of parent.
-*/
-/* 🔥 edward
-uint64_t *pml4;
-struct list file_descriptors;
-int next_fd;
-bool fds_initialized;
-*/
-
 	process_init ();
-
-	/* Finally, switch to the newly created process. */
-	if (succ) do_iret (&if_);
+	if (!syscall_duplicate_fds (parent, current)) goto error;
+	fs->success = true;
+	sema_up(&fs->semaphore);
+	do_iret (&if_); /* Finally, switch to the newly created process. */
 error:
+	fs->success = false;
+	sema_up(&fs->semaphore);
 	thread_exit ();
 }
 
@@ -249,18 +330,11 @@ process_exec (void *f_name) {
 	_if.cs = SEL_UCSEG;
 	_if.eflags = FLAG_IF | FLAG_MBS;
 
-	/* We first kill the current context */
-	process_cleanup ();
-
-	/* And then load the binary */
-	success = load (file_name, &_if);
-
-	/* If load failed, quit. */
+	process_cleanup (); /* We first kill the current context */
+	success = load (file_name, &_if); /* And then load the binary */
 	palloc_free_page (file_name);
-	if (!success) return -1;
-
-	/* Start switched process. */
-	do_iret (&_if);
+	if (!success) return -1; /* If load failed, quit. */
+	do_iret (&_if); /* Start switched process. */
 	NOT_REACHED ();
 }
 
@@ -276,43 +350,49 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid) {
-	waiting_system_init ();
-	lock_acquire (&lock_on_waiting_system);
-	if (child_tid != child_tid || is_currently_waiting) {
-		lock_release (&lock_on_waiting_system);
-		return -1;
-	}
-	is_currently_waiting = true;
-	lock_release (&lock_on_waiting_system);
-
-	sema_down (&parent_sleep_aid);
-
-	lock_acquire (&lock_on_waiting_system);
-	int status = child_status;
-	child_tid = TID_ERROR;
-	is_currently_waiting = false;
-	lock_release (&lock_on_waiting_system);
+	struct wait_status *ws = remove_child_wait_status (thread_current (), child_tid);
+	if (ws == NULL) return -1;
+	sema_down (&ws->sema);
+	lock_acquire (&ws->lock);
+	int status = ws->exit_code;
+	lock_release (&ws->lock);
+	wait_status_release (ws);
 	return status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
 void
 process_exit (void) {
+	/*
+	uint64_t *pml4;
+	struct list file_descriptors;
+	int next_fd;
+	bool fds_initialized;
+	struct list children;
+	bool children_initialized;
+	struct wait_status *wait_status;
+	*/
 	struct thread *curr = thread_current ();
 	if (curr->pml4 != NULL) printf ("%s: exit(%d)\n", curr->name, curr->exit_status);
 
-	waiting_system_init ();
-	lock_acquire (&lock_on_waiting_system);
-	if (curr->tid == child_tid) {
-		child_status = curr->exit_status;
-		sema_up (&parent_sleep_aid);
+	release_child_waits (curr);
+	if (curr->wait_status != NULL) {
+		lock_acquire (&curr->wait_status->lock);
+		curr->wait_status->exit_code = curr->exit_status;
+		curr->wait_status->exited = true;
+		lock_release (&curr->wait_status->lock);
+		sema_up (&curr->wait_status->sema);
+		wait_status_release (curr->wait_status);
+		curr->wait_status = NULL;
 	}
-	lock_release (&lock_on_waiting_system);
 
 	process_cleanup ();
 }
 
-/* Free the current process's resources. */
+/*
+Free the current process's resources.
+🔥 edward: destroy page table
+*/
 static void
 process_cleanup (void) {
 	struct thread *curr = thread_current ();
