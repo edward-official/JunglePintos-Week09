@@ -11,7 +11,7 @@ Booting from Hard Disk..Kernel command line: -q -f put open-null run open-null
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  150,528,000 loops/s.
+Calibrating timer...  419,020,800 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 321 sector (160 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -24,12 +24,12 @@ Executing 'open-null':
 (open-null) begin
 open-null: exit(-1)
 Execution of 'open-null' complete.
-Timer: 116 ticks
-Thread: 47 idle ticks, 67 kernel ticks, 3 user ticks
+Timer: 70 ticks
+Thread: 32 idle ticks, 37 kernel ticks, 1 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 84 reads, 266 writes
 hd1:0: 119 reads, 0 writes
-Console: 878 characters output
+Console: 877 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...
