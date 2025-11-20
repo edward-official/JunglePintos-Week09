@@ -5,7 +5,8 @@ iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+0138B4A0+012CB4A0 CA00
 Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
 
 
-Booting from Hard Disk..Kernel command line: -q -f put read-zero put sample.txt run read-zero
+Booting from Hard Disk...
+Kernel command line: -q -f put read-zero put sample.txt run read-zero
 0 ~ 9fc00 1
 100000 ~ 13e0000 1
 Pintos booting with: 
@@ -28,7 +29,7 @@ Executing 'read-zero':
 read-zero: exit(0)
 Execution of 'read-zero' complete.
 Timer: 79 ticks
-Thread: 39 idle ticks, 35 kernel ticks, 5 user ticks
+Thread: 39 idle ticks, 37 kernel ticks, 3 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 116 reads, 282 writes
 hd1:0: 122 reads, 0 writes

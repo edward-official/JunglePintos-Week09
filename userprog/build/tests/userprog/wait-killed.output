@@ -5,8 +5,7 @@ iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+0138B4A0+012CB4A0 CA00
 Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
 
 
-Booting from Hard Disk...
-Kernel command line: -q -f put wait-killed put child-bad run wait-killed
+Booting from Hard Disk..Kernel command line: -q -f put wait-killed put child-bad run wait-killed
 0 ~ 9fc00 1
 100000 ~ 13e0000 1
 Pintos booting with: 
@@ -26,27 +25,17 @@ Executing 'wait-killed':
 (wait-killed) begin
 (child-bad) begin
 load: pintos: open failed
-Page fault at 0x4034d6: not present error reading page in user context.
-child-bad: dying due to interrupt 0x0e (#PF Page-Fault Exception).
-Interrupt 0x0e (#PF Page-Fault Exception) at rip=4034d6
- cr2=00000000004034d6 error=               4
-rax ffffffffffffffff rbx 0000800422bc6000 rcx 00000000004034d6 rdx 0000000000000000
-rsp 000000004747ff28 rbp 000000004747ff70 rsi 0000000000000000 rdi 00000000004044c0
-rip 00000000004034d6 r8 0000000000000000  r9 0000000000000000 r10 0000000000000000
-r11 0000000000000216 r12 0000800424ce5000 r13 0000800424c00000 r14 0000800424305800
-r15 0000800424300000 rflags 00000216
-es: 001b ds: 001b cs: 0023 ss: 001b
-child-bad: exit(0)
-(wait-killed) wait(exec()) = 0
+child-bad: exit(-1)
+(wait-killed) wait(exec()) = -1
 (wait-killed) end
 wait-killed: exit(0)
 Execution of 'wait-killed' complete.
-Timer: 97 ticks
-Thread: 43 idle ticks, 41 kernel ticks, 14 user ticks
+Timer: 96 ticks
+Thread: 51 idle ticks, 35 kernel ticks, 10 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 181 reads, 514 writes
 hd1:0: 238 reads, 0 writes
-Console: 1711 characters output
+Console: 1065 characters output
 Keyboard: 0 keys pressed
-Exception: 1 page faults
+Exception: 0 page faults
 Powering off...

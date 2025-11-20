@@ -35,7 +35,7 @@ es: 001b ds: 001b cs: 0023 ss: 001b
 bad-read: exit(0)
 Execution of 'bad-read' complete.
 Timer: 90 ticks
-Thread: 36 idle ticks, 47 kernel ticks, 7 user ticks
+Thread: 36 idle ticks, 48 kernel ticks, 7 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 85 reads, 266 writes
 hd1:0: 119 reads, 0 writes

@@ -34,12 +34,12 @@ r15 0000800421a16e00 rflags 00000212
 es: 001b ds: 001b cs: 0023 ss: 001b
 bad-write2: exit(0)
 Execution of 'bad-write2' complete.
-Timer: 83 ticks
-Thread: 34 idle ticks, 38 kernel ticks, 11 user ticks
+Timer: 90 ticks
+Thread: 44 idle ticks, 38 kernel ticks, 8 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 85 reads, 266 writes
 hd1:0: 119 reads, 0 writes
-Console: 1542 characters output
+Console: 1541 characters output
 Keyboard: 0 keys pressed
 Exception: 1 page faults
 Powering off...

@@ -8,7 +8,7 @@ create-normal PASS
 bad-write FAIL
 open-twice PASS
 exec-arg PASS
-exec-missing FAIL
+exec-missing PASS
 read-bad-ptr PASS
 create-long PASS
 fork-close PASS
@@ -41,7 +41,7 @@ write-normal PASS
 bad-read FAIL
 fork-once PASS
 write-boundary PASS
-wait-killed FAIL
+wait-killed PASS
 close-bad-fd PASS
 multi-child-fd PASS
 exit PASS

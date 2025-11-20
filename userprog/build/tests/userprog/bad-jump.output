@@ -34,8 +34,8 @@ r15 0000800421a16e00 rflags 00000212
 es: 001b ds: 001b cs: 0023 ss: 001b
 bad-jump: exit(0)
 Execution of 'bad-jump' complete.
-Timer: 83 ticks
-Thread: 40 idle ticks, 37 kernel ticks, 6 user ticks
+Timer: 80 ticks
+Thread: 34 idle ticks, 39 kernel ticks, 7 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 85 reads, 266 writes
 hd1:0: 119 reads, 0 writes

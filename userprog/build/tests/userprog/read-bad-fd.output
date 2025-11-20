@@ -26,7 +26,7 @@ Executing 'read-bad-fd':
 read-bad-fd: exit(0)
 Execution of 'read-bad-fd' complete.
 Timer: 76 ticks
-Thread: 36 idle ticks, 37 kernel ticks, 3 user ticks
+Thread: 36 idle ticks, 36 kernel ticks, 4 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 85 reads, 266 writes
 hd1:0: 119 reads, 0 writes

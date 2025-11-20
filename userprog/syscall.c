@@ -234,8 +234,7 @@ fork_handler (const char *name, struct intr_frame *f) {
 static int
 exec_handler (const char *cmd_line) {
 	char *fn_copy = copy_user_string (cmd_line);
-	if (fn_copy == NULL)
-		return -1;
+	if (fn_copy == NULL) return -1;
 	return process_exec (fn_copy);
 }
 

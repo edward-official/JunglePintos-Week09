@@ -30,6 +30,7 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *aux);
 static void __do_fork (void *);
+
 static struct wait_status *wait_status_create (void);
 static void wait_status_release (struct wait_status *ws);
 static void add_child_wait_status (struct thread *parent, struct wait_status *ws);
@@ -43,7 +44,7 @@ struct initd_args {
 
 /*
 General process initializer for initd and other process.
-🔥 edward: initialize struct of current thread
+edward: initialize struct of current thread
 */
 static void
 process_init (void) {
@@ -74,7 +75,7 @@ wait_status_create (void) {
 	return ws;
 }
 
-/* 🔥 edward: decrease reference by 1 and free "ws" when "ref_cnt == 0" */
+/* edward: decrease reference by 1 and free "ws" when "ref_cnt == 0" */
 static void
 wait_status_release (struct wait_status *ws) {
 	bool free_ws = false;
@@ -86,7 +87,7 @@ wait_status_release (struct wait_status *ws) {
 	if (free_ws) free (ws);
 }
 
-/* 🔥 edward: put "ws" into list(parent's children list) */
+/* edward: put "ws" into list(parent's children list) */
 static void
 add_child_wait_status (struct thread *parent, struct wait_status *ws) {
 	if (!parent->children_initialized) {
@@ -96,7 +97,7 @@ add_child_wait_status (struct thread *parent, struct wait_status *ws) {
 	list_push_back (&parent->children, &ws->elem);
 }
 
-/* 🔥 remove the given child from the list */
+/* remove the given child from the list */
 static struct wait_status *
 remove_child_wait_status (struct thread *parent, tid_t child_tid) {
 	if (!parent->children_initialized) return NULL;
@@ -110,7 +111,7 @@ remove_child_wait_status (struct thread *parent, tid_t child_tid) {
 	return NULL;
 }
 
-/* 🔥 edward: delist every child left on the list and decrease the following "ref_cnt" of the wait_status struct object */
+/* edward: delist every child left on the list and decrease the following "ref_cnt" of the wait_status struct object */
 static void
 release_child_waits (struct thread *t) {
 	if (!t->children_initialized) return;
@@ -193,7 +194,7 @@ tid_t
 process_fork (const char *name, struct intr_frame *if_) {
 	process_init ();
 	
-	/* 🔥 edward: make fork structure */
+	/* edward: make fork structure */
 	struct fork_struct *fs = malloc(sizeof *fs);
 	if(!fs) return TID_ERROR;
 	fs->wait_status = wait_status_create ();
@@ -202,31 +203,31 @@ process_fork (const char *name, struct intr_frame *if_) {
 		return TID_ERROR;
 	}
 	
-	/* 🔥 edward: set up current thread */
+	/* edward: set up current thread */
 	fs->parent = thread_current();
 	memcpy(&fs->parent_if, if_, sizeof fs->parent_if);
 	sema_init(&fs->semaphore, 0);
 	fs->success = false;
 
-	/* 🔥 edward: fork */
-	enum intr_level old_level = intr_disable (); /* 🔥 edward: protection for fork struct */
+	/* edward: fork */
+	enum intr_level old_level = intr_disable (); /* edward: protection for fork struct */
 	tid_t tid = thread_create(name, PRI_DEFAULT, __do_fork, fs);
 
-	if(tid == TID_ERROR) { /* 🔥 edward: in case of creation failure */
+	if(tid == TID_ERROR) { /* edward: in case of creation failure */
 		intr_set_level (old_level);
-		/* 🔥 edward: parent + child */
+		/* edward: parent + child */
 		wait_status_release (fs->wait_status);
 		wait_status_release (fs->wait_status);
 		free(fs);
 		return TID_ERROR;
 	}
 
-	/* 🔥 edward: enlist the child to the list of parent thread struct */
+	/* edward: enlist the child to the list of parent thread struct */
 	fs->wait_status->tid = tid;
 	add_child_wait_status (thread_current (), fs->wait_status);
 	intr_set_level (old_level);
 
-	sema_down(&fs->semaphore); /* 🔥 edward: wait for child to wake it up */
+	sema_down(&fs->semaphore); /* edward: wait for child to wake it up after the fork */
 	if(fs->success) {
 		free(fs);
 		return tid;
@@ -244,7 +245,7 @@ This is only for the project 2.
 */
 static bool
 duplicate_pte (uint64_t *pte, void *va, void *aux) {
-	/* 🔥 edward
+	/* edward
 	pte: parent's page table entry.
 	va: page address where parent's pte points at.
 	aux: currently thread struct pointer of parent thread.
@@ -255,7 +256,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	void *newpage;
 	bool writable;
 
-	/* 🔥 edward
+	/* edward
 	how is that even possible?
 	does user program have any kernel page in their page table?????????
 	"pml4_create" method copies the "base_pml4"(kernel mappings) right into the user process' page table
@@ -301,13 +302,13 @@ __do_fork (void *aux) {
 	supplemental_page_table_init (&current->spt);
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt)) goto error;
 #else
-	if (!pml4_for_each (parent->pml4, duplicate_pte, parent)) goto error; /* 🔥 edward: copy page table */
+	if (!pml4_for_each (parent->pml4, duplicate_pte, parent)) goto error; /* edward: copy page table */
 #endif
 
 	process_init ();
 	if (!syscall_duplicate_fds (parent, current)) goto error;
 	fs->success = true;
-	sema_up(&fs->semaphore);
+	sema_up(&fs->semaphore); /* edward: wake parent up */
 	do_iret (&if_); /* Finally, switch to the newly created process. */
 error:
 	fs->success = false;
@@ -315,8 +316,10 @@ error:
 	thread_exit ();
 }
 
-/* Switch the current execution context to the f_name.
- * Returns -1 on fail. */
+/*
+Switch the current execution context to the f_name.
+Returns -1 on fail.
+*/
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
@@ -332,22 +335,26 @@ process_exec (void *f_name) {
 
 	process_cleanup (); /* We first kill the current context */
 	success = load (file_name, &_if); /* And then load the binary */
+	/* test 46 fails.. */
 	palloc_free_page (file_name);
-	if (!success) return -1; /* If load failed, quit. */
+	if (!success) {
+		thread_current ()->exit_status = -1;
+		thread_exit (); /* If load failed, terminate the process. */
+	}
 	do_iret (&_if); /* Start switched process. */
 	NOT_REACHED ();
 }
 
 
-/* Waits for thread TID to die and returns its exit status.  If
- * it was terminated by the kernel (i.e. killed due to an
- * exception), returns -1.  If TID is invalid or if it was not a
- * child of the calling process, or if process_wait() has already
- * been successfully called for the given TID, returns -1
- * immediately, without waiting.
- *
- * This function will be implemented in problem 2-2.  For now, it
- * does nothing. */
+/*
+Waits for thread TID to die and returns its exit status.
+If it was terminated by the kernel (i.e. killed due to an exception), returns -1.
+If TID is invalid or if it was not a child of the calling process,
+or if process_wait() has already been successfully called for the given TID, returns -1 immediately, without waiting.
+
+This function will be implemented in problem 2-2.
+For now, it does nothing.
+*/
 int
 process_wait (tid_t child_tid) {
 	struct wait_status *ws = remove_child_wait_status (thread_current (), child_tid);
@@ -360,7 +367,10 @@ process_wait (tid_t child_tid) {
 	return status;
 }
 
-/* Exit the process. This function is called by thread_exit (). */
+/*
+Exit the process.
+This function is called by thread_exit ().
+*/
 void
 process_exit (void) {
 	/*
@@ -379,9 +389,9 @@ process_exit (void) {
 	if (curr->wait_status != NULL) {
 		lock_acquire (&curr->wait_status->lock);
 		curr->wait_status->exit_code = curr->exit_status;
-		curr->wait_status->exited = true;
+		curr->wait_status->exited = true; /* edward: alert parent that current child process finished */
 		lock_release (&curr->wait_status->lock);
-		sema_up (&curr->wait_status->sema);
+		sema_up (&curr->wait_status->sema); /* edward: wake parent up */
 		wait_status_release (curr->wait_status);
 		curr->wait_status = NULL;
 	}
@@ -391,7 +401,7 @@ process_exit (void) {
 
 /*
 Free the current process's resources.
-🔥 edward: destroy page table
+edward: destroy page table
 */
 static void
 process_cleanup (void) {
@@ -513,7 +523,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	if (file_name_copy == NULL) goto done;
 	strlcpy (file_name_copy, file_name, PGSIZE);
 
-	/* 🔥 edward: parse the token */
+	/* edward: parse the token TODO */
 	for (token = strtok_r (file_name_copy, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)) {
 		if (argc >= MAX_ARGS) goto done;
 		argv[argc++] = token;
@@ -526,8 +536,8 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
-	/* 🔥 edward: open requested ELF file. */
-	file = filesys_open (argv[0]);
+	/* edward: open requested ELF file. */
+	file = filesys_open (argv[0]); /* test 46 fails.. */
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", argv[0]);
 		goto done;
@@ -546,7 +556,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Read program headers. */
-	file_ofs = ehdr.e_phoff; /* 🔥 edward: ELF Program Header Offset */
+	file_ofs = ehdr.e_phoff; /* edward: ELF Program Header Offset */
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		struct Phdr phdr;
 
@@ -595,10 +605,10 @@ load (const char *file_name, struct intr_frame *if_) {
 		}
 	}
 
-	if (!setup_stack (if_)) goto done; /* 🔥 edward: set up the stack for the process. */
-	if_->rip = ehdr.e_entry; /* 🔥 edward: put the instruction pointer. */
+	if (!setup_stack (if_)) goto done; /* edward: set up the stack for the process. */
+	if_->rip = ehdr.e_entry; /* edward: put the instruction pointer. */
 
-	/* 🔥 edward: pushing arguments */
+	/* edward: pushing arguments */
 	for (i = argc - 1; i >= 0; i--) {
 		size_t arg_len = strlen (argv[i]) + 1;
 		if_->rsp -= arg_len;
@@ -606,24 +616,24 @@ load (const char *file_name, struct intr_frame *if_) {
 		argv_addrs[i] = if_->rsp;
 	}
 
-	/* 🔥 edward: pushing padding for the 16 bytes alignment. */
+	/* edward: pushing padding for the 16 bytes alignment. */
 	size_t padding = if_->rsp % 16;
 	if (padding) {
 		if_->rsp -= padding;
 		memset ((void *) if_->rsp, 0, padding);
 	}
 
-	/* 🔥 edward: pushing null sentinel */
+	/* edward: pushing null sentinel */
 	if_->rsp -= sizeof (uintptr_t);
 	memset ((void *) if_->rsp, 0, sizeof (uintptr_t));
 
-	/* 🔥 edward: pushing addresses of arguments */
+	/* edward: pushing addresses of arguments */
 	for (i = argc - 1; i >= 0; i--) {
 		if_->rsp -= sizeof (uintptr_t);
 		memcpy ((void *) if_->rsp, &argv_addrs[i], sizeof (uintptr_t));
 	}
 	
-	/* 🔥 edward: not sure if these further information pushes are required */
+	/* edward: not sure if these further information pushes are required */
 	uintptr_t argv_start = if_->rsp;
 	
 	if_->rsp -= sizeof (uintptr_t);
@@ -643,8 +653,7 @@ load (const char *file_name, struct intr_frame *if_) {
 done:
 	/* We arrive here whether the load is successful or not. */
 	file_close (file);
-	if (file_name_copy != NULL)
-		palloc_free_page (file_name_copy);
+	if (file_name_copy != NULL) palloc_free_page (file_name_copy);
 	return success;
 }
 
