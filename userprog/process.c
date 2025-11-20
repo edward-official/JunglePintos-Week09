@@ -213,6 +213,8 @@ __do_fork (void *aux) {
 		}
 	}
 
+	current->running_file = file_duplicate(parent->running_file);
+
 	process_init ();
 
 	struct semaphore *fork_sema = args->fork_sema;
@@ -297,7 +299,6 @@ process_wait (tid_t child_tid) {
 		}
 	}
 
-
 	return -1;
 }
 
@@ -316,6 +317,8 @@ process_exit (void) {
 		
 		palloc_free_page(thread_current()->fdt);
 	}
+	
+	file_close(curr->running_file);
 
 	sema_up(&curr->child_sema);
 
@@ -467,6 +470,8 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
+	file_deny_write(file);
+	thread_current()->running_file = file;
 
 	//ELF 헤더 검사 -> 파일의 맨 앞부분을 size ehdr만큼 읽어서 검사.
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -590,8 +595,10 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
-
+	if(success != true){
+		file_close (file);
+		thread_current()->running_file = NULL;
+	}
 	//NOTE : 추가
 	//fn_copy를 다 썼으므로 free시켜줌.
 	palloc_free_page(fn_copy);

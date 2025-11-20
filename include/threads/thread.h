@@ -124,6 +124,9 @@ struct thread {
 	struct list_elem elem_for_parent;
 	struct semaphore child_sema;
 
+	//현재 실행중인 파일을 close하기 위한 FILE
+	struct file *running_file;
+
 #ifdef USERPROG
 
 	// //페이지 테이블의 최상위 주소를 담는 포인터
