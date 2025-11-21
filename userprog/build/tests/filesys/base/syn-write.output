@@ -11,9 +11,9 @@ Booting from Hard Disk..Kernel command line: -q -f put syn-write put child-syn-w
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  209,510,400 loops/s.
+Calibrating timer...  157,081,600 loops/s.
 hd0: unexpected interrupt
-hd0:0: detected 345 sector (172 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
 hd1: unexpected interrupt
 hd1:0: detected 261 sector (130 kB) disk, model "QEMU HARDDISK", serial "QM00003"
@@ -59,8 +59,8 @@ child-syn-wrt: exit(1)
 (syn-write) end
 syn-write: exit(0)
 Execution of 'syn-write' complete.
-Timer: 128 ticks
-Thread: 54 idle ticks, 47 kernel ticks, 27 user ticks
+Timer: 125 ticks
+Thread: 52 idle ticks, 42 kernel ticks, 31 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 754 reads, 592 writes
 hd1:0: 261 reads, 0 writes

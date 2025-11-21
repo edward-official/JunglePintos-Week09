@@ -13,7 +13,7 @@ Pintos booting with:
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
 Calibrating timer...  209,510,400 loops/s.
 hd0: unexpected interrupt
-hd0:0: detected 345 sector (172 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
 hd1: unexpected interrupt
 hd1:0: detected 126 sector (63 kB) disk, model "QEMU HARDDISK", serial "QM00003"
@@ -27,8 +27,8 @@ Executing 'read-boundary':
 (read-boundary) end
 read-boundary: exit(0)
 Execution of 'read-boundary' complete.
-Timer: 86 ticks
-Thread: 41 idle ticks, 38 kernel ticks, 8 user ticks
+Timer: 80 ticks
+Thread: 38 idle ticks, 37 kernel ticks, 5 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 119 reads, 290 writes
 hd1:0: 126 reads, 0 writes

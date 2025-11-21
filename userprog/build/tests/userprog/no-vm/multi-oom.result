@@ -1,2 +1,2 @@
 FAIL
-run: crashed child should return -1.: FAILED
+run: should have forked at least 33 times, but 12 times forked: FAILED

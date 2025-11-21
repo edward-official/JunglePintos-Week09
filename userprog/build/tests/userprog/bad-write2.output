@@ -11,9 +11,9 @@ Booting from Hard Disk..Kernel command line: -q -f put bad-write2 run bad-write2
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  209,510,400 loops/s.
+Calibrating timer...  157,081,600 loops/s.
 hd0: unexpected interrupt
-hd0:0: detected 345 sector (172 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
 hd1: unexpected interrupt
 hd1:0: detected 119 sector (59 kB) disk, model "QEMU HARDDISK", serial "QM00003"
@@ -22,24 +22,14 @@ Boot complete.
 Putting 'bad-write2' into the file system...
 Executing 'bad-write2':
 (bad-write2) begin
-Page fault at 0x8004000000: rights violation error writing page in user context.
-bad-write2: dying due to interrupt 0x0e (#PF Page-Fault Exception).
-Interrupt 0x0e (#PF Page-Fault Exception) at rip=400012
- cr2=0000008004000000 error=               7
-rax 0000008004000000 rbx 0000800423f03800 rcx 0000000000406240 rdx 0000000000406340
-rsp 000000004747ff80 rbp 000000004747ff80 rsi 000000000040624e rdi 000000000040633f
-rip 0000000000400012 r8 0000000000000000  r9 0000000000000000 r10 0000000000000000
-r11 0000000000000202 r12 00008004244f2000 r13 0000800422ab2000 r14 00008004244ef000
-r15 0000800421a16e00 rflags 00000212
-es: 001b ds: 001b cs: 0023 ss: 001b
-bad-write2: exit(0)
+bad-write2: exit(-1)
 Execution of 'bad-write2' complete.
-Timer: 79 ticks
-Thread: 36 idle ticks, 36 kernel ticks, 7 user ticks
+Timer: 76 ticks
+Thread: 38 idle ticks, 36 kernel ticks, 2 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 85 reads, 266 writes
 hd1:0: 119 reads, 0 writes
-Console: 1541 characters output
+Console: 884 characters output
 Keyboard: 0 keys pressed
 Exception: 1 page faults
 Powering off...

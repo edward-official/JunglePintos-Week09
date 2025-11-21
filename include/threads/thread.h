@@ -113,9 +113,8 @@ struct thread {
 	struct list_elem elem_for_donators;
 	struct list_elem elem_whole;
 	int64_t wakeup_tick;
-
-
-#ifdef USERPROG
+	
+	#ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
 	struct list file_descriptors;       /* Open file descriptors. */
@@ -124,6 +123,7 @@ struct thread {
 	struct list children;               /* Child wait statuses. */
 	bool children_initialized;          /* Tracks list initialization. */
 	struct wait_status *wait_status;    /* Synchronization with parent. */
+	struct file *running_file;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

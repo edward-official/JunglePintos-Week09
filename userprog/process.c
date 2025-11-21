@@ -395,12 +395,11 @@ process_exit (void) {
 		wait_status_release (curr->wait_status);
 		curr->wait_status = NULL;
 	}
-	if(curr->running_file) {
+	if (curr->running_file) {
 		file_allow_write(curr->running_file);
 		file_close(curr->running_file);
 		curr->running_file = NULL;
 	}
-
 	process_cleanup ();
 }
 
