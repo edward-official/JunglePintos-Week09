@@ -207,6 +207,7 @@ __do_fork (void *aux) {
 	(중요) 부모는 자식 프로세스가 부모의 자원을 성공적으로 복제할 때까지 fork()에서 반환해서는 안됩니다.
 	*/
 
+	lock_acquire(&filesys_lock);
 	for(int i=2; i<64; i++){
 		if(parent->fdt[i] != NULL){
 			current->fdt[i] = file_duplicate(parent->fdt[i]);
@@ -214,6 +215,7 @@ __do_fork (void *aux) {
 	}
 
 	current->running_file = file_duplicate(parent->running_file);
+	lock_release(&filesys_lock);
 
 	process_init ();
 
@@ -307,6 +309,7 @@ void
 process_exit (void) {
 	struct thread *curr = thread_current ();
 
+	lock_acquire(&filesys_lock);
 	if(curr->fdt != NULL){
 		for(int i=2; i<64; i++){
 			if(curr->fdt[i] != NULL){
@@ -319,6 +322,8 @@ process_exit (void) {
 	}
 	
 	file_close(curr->running_file);
+
+	lock_release(&filesys_lock);
 
 	sema_up(&curr->child_sema);
 
@@ -465,13 +470,18 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 
 	//디스크에서 file_name이라는 파일을 찾아서 열음.
 	//NOTE : 수정 -> file_name을 그대로 넣으면 "ls -l foo"를 찾는게 되어버림.
+	lock_acquire(&filesys_lock);
 	file = filesys_open (argv[0]);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
+		lock_release(&filesys_lock);
 		goto done;
 	}
+
 	file_deny_write(file);
-	thread_current()->running_file = file;
+	if(t->running_file != NULL) file_close(t->running_file);
+	t->running_file = file;
+	lock_release(&filesys_lock);
 
 	//ELF 헤더 검사 -> 파일의 맨 앞부분을 size ehdr만큼 읽어서 검사.
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
