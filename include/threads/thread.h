@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -92,15 +93,21 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 	int64_t wakeup_tick;                /* 🔥 Modified: possibly can lead to macro error */ /* #define list_entry(LIST_ELEM, STRUCT, MEMBER) */
-
+	#define FDT_COUNT_LIMIT 64
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
-
+	struct file **fd_table;
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
-
 	int exit_status;
+	
+	struct thread *parent;
+	struct list children;
+	struct list_elem child_elem;
+
+	struct semaphore wait_sema;
+	struct semaphore exit_sema;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

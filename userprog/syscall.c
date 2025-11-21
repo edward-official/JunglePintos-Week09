@@ -9,7 +9,6 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 #include "filesys/filesys.h"
-#include "devices/input.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -27,6 +26,12 @@ void syscall_handler (struct intr_frame *);
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
 
+void check_address(void *addr, struct intr_frame *f);
+void syscall_write(struct intr_frame *f UNUSED);
+void syscall_exit(struct intr_frame *f UNUSED);
+void syscall_create (struct intr_frame *f);
+void syscall_open (struct intr_frame *f);
+void syscall_close (struct intr_frame *f);
 
 /*'syscall_init(void)
 	*역할: 시스템 콜 메커니즘을 단 한번 초기화함
@@ -78,7 +83,7 @@ syscall_init (void) {
 		}
 	}
 
-	void syscall_write(struct intr_frame *f UNUSED){
+	void syscall_write(struct intr_frame *f){
 		int fd = f->R.rdi;
 		char *buf = f->R.rsi;
 		size_t size = f->R.rdx;
@@ -88,23 +93,20 @@ syscall_init (void) {
 			}
 			else if(fd == 1){
 				putbuf(buf, size);
-				f->R.rax = size;
 			}
 			else if(fd >= 2 && fd < FDT_COUNT_LIMIT){
-				struct file *file = thread_current()->fd_table[fd];
-				if(file == NULL){
+				struct file *file_to_write = thread_current()->fd_table[fd];
+				if(file_to_write == NULL){
 					f->R.rax = -1;
 				}
 				else{
-					f->R.rax = file_write(file, buf, size);
+					f->R.rax = file_write(file_to_write, buf, size);
+				
 				}
+
 			}
-			else{
-				f->R.rax = -1;
-			}	
-			
-		}
-	void syscall_exit(struct intr_frame *f UNUSED){
+	}
+	void syscall_exit(struct intr_frame *f){
 		int status = f->R.rdi;
 		thread_current() ->exit_status = status;
 		printf("%s: exit(%d)\n", thread_name(), status);
@@ -137,55 +139,79 @@ syscall_init (void) {
 	}
 	void syscall_close (struct intr_frame *f){
 		int fd = f->R.rdi;
-		if(fd == 0 || fd == 1){
-			return;
-		}
+		
 		// fd가 유효한 범위(2 ~ FDT_COUNT_LIMIT-1)에 있는지 확인
 		if(fd < 2 || fd >= FDT_COUNT_LIMIT){
 			return;
 		}
 
-		struct file *file = thread_current()->fd_table[fd];
+		struct file *file_to_close = thread_current()->fd_table[fd];
 
-		if(file != NULL){
-			file_close(file);
+		if(file_to_close != NULL){
+			file_close(file_to_close);
 			// fd 테이블의 해당 슬롯을 비워서 재사용 가능하게 함
 			thread_current()->fd_table[fd] = NULL;
 		}
 	}
-	void syscall_read(struct intr_frame *f) {
+		
+	void syscall_read (struct intr_frame *f){
 		int fd = f->R.rdi;
-		void *buf = f->R.rsi;
+		char *buf = f->R.rsi;
 		size_t size = f->R.rdx;
 		check_address(buf, f);
-
-		if (fd == 0) { //fd = 0, 표준 입력일 경우 input_getc()함수를 통해 키보드에서 한 글자씩 읽어 버퍼에 저장
-			char *char_buf = (char *)buf;
-			for (unsigned i = 0; i < size; i++) {
-				char_buf[i] = input_getc();
+		if(fd == 0){
+			for(int i = 0; i < size; i++){
+				buf[i] = input_getc();
+				if(buf[i] == '\0'){
+					break;
+				}
 			}
-			f->R.rax = size; // 읽은 바이트 수 반환
-		} else if (fd == 1) { // fd = 1, 표준 출력일 경우 쓰기 전용, read를 사용하는건 오류
+			f->R.rax = size;
+		}
+		else if(fd == 1){
 			f->R.rax = -1;
-		} else if (fd >= 2 && fd < FDT_COUNT_LIMIT) { // 일반 파일
-			struct file *file = thread_current()->fd_table[fd];
-			if (file == NULL) {
-				f->R.rax = -1; // 열리지 않은 파일
-			} else {
-				f->R.rax = file_read(file, buf, size);
+		}
+		else if(fd >= 2 && fd < FDT_COUNT_LIMIT){
+			struct file *file_to_read = thread_current()->fd_table[fd];
+			if(file_to_read == NULL){
+				f->R.rax = -1;
 			}
-		} else { // 유효하지 않은 fd
+			else{
+				f->R.rax = file_read(file_to_read, buf, size);
+			}
+		}
+		else{
 			f->R.rax = -1;
 		}
 	}
-	void syscall_filesize(struct intr_frame *f){
-		f->R.rax = file_length(thread_current()->fd_table[f->R.rdi]);
-	}
-	void syscall_fork(struct intr_frame *f){
-		return;
+
+	void syscall_filesize (struct intr_frame *f){
+		int fd = f->R.rdi;
+		if(fd < 2 || fd >= FDT_COUNT_LIMIT){
+			f->R.rax = -1;
+			return;
+		}
+		else if(fd == 0 || fd == 1){
+			f->R.rax = -1;
+			return;
+		}
+		else if(fd >= 2 && fd < FDT_COUNT_LIMIT){
+			struct file *file_to_size = thread_current()->fd_table[fd];
+			if(file_to_size == NULL){
+				f->R.rax = -1;
+			}
+			else{
+				f->R.rax = file_length(file_to_size);
+			}
+		}
+		else{
+			f->R.rax = -1;
+		}
 	
+		
 	}
-	
+		
+
 	
 
 void
@@ -215,7 +241,6 @@ syscall_handler (struct intr_frame *f) {
 			break;
 
 		case SYS_FORK:
-			syscall_fork(f);
 			break;
 		
 		case SYS_EXEC:
@@ -236,7 +261,6 @@ syscall_handler (struct intr_frame *f) {
 			syscall_filesize(f);
 			break;
 		
-		/*int read (int fd, void *buffer, unsigned size); (인자 3개: fd, buffer, size)*/
 		case SYS_READ:
 			syscall_read(f);
 			break;

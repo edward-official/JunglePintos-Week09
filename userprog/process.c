@@ -50,6 +50,15 @@ process_fork, __do_fork, duplicate_pte*/
 static void
 process_init (void) {
 	struct thread *current = thread_current ();
+
+
+
+	current->fd_table = palloc_get_page(PAL_ZERO);
+	if(current->fd_table == NULL)
+		return;
+
+
+
 }
 
 /* 
