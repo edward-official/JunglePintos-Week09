@@ -903,13 +903,15 @@ Check if the current thread has to hand over the control to the first thread on 
 And if it has to, hand over.
 */
 void check_preemption(void) {
-	if (!list_empty(&ready_list)) {
-		struct thread *curr = thread_current();
-		struct list_elem *front_elem = list_front(&ready_list);
-		struct thread *front_thread = list_entry(front_elem, struct thread, elem);
+	enum intr_level old_level = intr_disable ();
+	if (!list_empty (&ready_list)) {
+		struct thread *curr = thread_current ();
+		struct list_elem *front_elem = list_front (&ready_list);
+		struct thread *front_thread = list_entry (front_elem, struct thread, elem);
 		if (front_thread->priority > curr->priority) {
-			if (intr_context()) intr_yield_on_return();
-			else thread_yield();
+			if (intr_context ()) intr_yield_on_return ();
+			else thread_yield ();
 		}
 	}
+	intr_set_level (old_level);
 }

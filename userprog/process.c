@@ -400,6 +400,7 @@ process_exit (void) {
 		file_close(curr->running_file);
 		curr->running_file = NULL;
 	}
+	syscall_process_cleanup();
 	process_cleanup ();
 }
 

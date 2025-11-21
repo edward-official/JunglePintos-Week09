@@ -5,16 +5,15 @@ iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+0138B4A0+012CB4A0 CA00
 Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
 
 
-Booting from Hard Disk...
-Kernel command line: -q -f put lg-seq-block run lg-seq-block
+Booting from Hard Disk..Kernel command line: -q -f put lg-seq-block run lg-seq-block
 0 ~ 9fc00 1
 100000 ~ 13e0000 1
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  157,081,600 loops/s.
+Calibrating timer...  209,510,400 loops/s.
 hd0: unexpected interrupt
-hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:0: detected 345 sector (172 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
 hd1: unexpected interrupt
 hd1:0: detected 124 sector (62 kB) disk, model "QEMU HARDDISK", serial "QM00003"
@@ -33,12 +32,12 @@ Executing 'lg-seq-block':
 (lg-seq-block) end
 lg-seq-block: exit(0)
 Execution of 'lg-seq-block' complete.
-Timer: 106 ticks
-Thread: 59 idle ticks, 41 kernel ticks, 6 user ticks
+Timer: 97 ticks
+Thread: 58 idle ticks, 31 kernel ticks, 9 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 558 reads, 731 writes
 hd1:0: 124 reads, 0 writes
-Console: 1161 characters output
+Console: 1160 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

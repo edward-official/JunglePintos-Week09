@@ -13,7 +13,7 @@ Pintos booting with:
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
 Calibrating timer...  209,510,400 loops/s.
 hd0: unexpected interrupt
-hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:0: detected 345 sector (172 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
 hd1: unexpected interrupt
 hd1:0: detected 124 sector (62 kB) disk, model "QEMU HARDDISK", serial "QM00003"
@@ -32,8 +32,8 @@ Executing 'sm-seq-block':
 (sm-seq-block) end
 sm-seq-block: exit(0)
 Execution of 'sm-seq-block' complete.
-Timer: 85 ticks
-Thread: 42 idle ticks, 34 kernel ticks, 9 user ticks
+Timer: 84 ticks
+Thread: 37 idle ticks, 38 kernel ticks, 9 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 150 reads, 323 writes
 hd1:0: 124 reads, 0 writes
