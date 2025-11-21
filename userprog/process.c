@@ -395,6 +395,11 @@ process_exit (void) {
 		wait_status_release (curr->wait_status);
 		curr->wait_status = NULL;
 	}
+	if(curr->running_file) {
+		file_allow_write(curr->running_file);
+		file_close(curr->running_file);
+		curr->running_file = NULL;
+	}
 
 	process_cleanup ();
 }
@@ -542,6 +547,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: open failed\n", argv[0]);
 		goto done;
 	}
+	file_deny_write(file);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -652,7 +658,8 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	if (!success) file_close (file);
+	else thread_current()->running_file = file;
 	if (file_name_copy != NULL) palloc_free_page (file_name_copy);
 	return success;
 }

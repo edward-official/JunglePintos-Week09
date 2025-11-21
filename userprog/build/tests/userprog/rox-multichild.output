@@ -13,7 +13,7 @@ Pintos booting with:
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
 Calibrating timer...  209,510,400 loops/s.
 hd0: unexpected interrupt
-hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:0: detected 345 sector (172 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
 hd1: unexpected interrupt
 hd1:0: detected 254 sector (127 kB) disk, model "QEMU HARDDISK", serial "QM00003"
@@ -29,17 +29,43 @@ Executing 'rox-multichild':
 (rox-multichild) exec "child-rox 5"
 (child-rox) begin
 (child-rox) try to write "child-rox"
-(child-rox) try to write "child-rox": FAILED
-child-rox: exit(1)
-(rox-multichild) wait for child: FAILED
-rox-multichild: exit(1)
+(child-rox) exec "child-rox 4"
+(child-rox) begin
+(child-rox) try to write "child-rox"
+(child-rox) exec "child-rox 3"
+(child-rox) begin
+(child-rox) try to write "child-rox"
+(child-rox) exec "child-rox 2"
+(child-rox) begin
+(child-rox) try to write "child-rox"
+(child-rox) exec "child-rox 1"
+(child-rox) begin
+(child-rox) try to write "child-rox"
+(child-rox) try to write "child-rox"
+(child-rox) end
+child-rox: exit(12)
+(child-rox) try to write "child-rox"
+(child-rox) end
+child-rox: exit(12)
+(child-rox) try to write "child-rox"
+(child-rox) end
+child-rox: exit(12)
+(child-rox) try to write "child-rox"
+(child-rox) end
+child-rox: exit(12)
+(child-rox) try to write "child-rox"
+(child-rox) end
+child-rox: exit(12)
+(rox-multichild) write "child-rox"
+(rox-multichild) end
+rox-multichild: exit(0)
 Execution of 'rox-multichild' complete.
-Timer: 92 ticks
-Thread: 45 idle ticks, 38 kernel ticks, 9 user ticks
+Timer: 116 ticks
+Thread: 47 idle ticks, 43 kernel ticks, 26 user ticks
 hd0:0: 0 reads, 0 writes
-hd0:1: 179 reads, 548 writes
+hd0:1: 430 reads, 548 writes
 hd1:0: 254 reads, 0 writes
-Console: 1269 characters output
+Console: 1932 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

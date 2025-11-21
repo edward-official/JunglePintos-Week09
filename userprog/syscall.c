@@ -141,10 +141,9 @@ write_handler (int fd, const void *buffer, unsigned length) {
 		return (int) length;
 	}
 	if (fd == STDIN_FILENO) return -1;
-
+	
 	struct file_descriptor *desc = fd_lookup (fd);
 	if (desc == NULL) return -1;
-
 	lock_acquire (&filesys_lock);
 	int result = file_write (desc->file, buffer, length);
 	lock_release (&filesys_lock);
