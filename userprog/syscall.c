@@ -141,10 +141,9 @@ write_handler (int fd, const void *buffer, unsigned length) {
 		return (int) length;
 	}
 	if (fd == STDIN_FILENO) return -1;
-
+	
 	struct file_descriptor *desc = fd_lookup (fd);
 	if (desc == NULL) return -1;
-
 	lock_acquire (&filesys_lock);
 	int result = file_write (desc->file, buffer, length);
 	lock_release (&filesys_lock);
@@ -234,8 +233,7 @@ fork_handler (const char *name, struct intr_frame *f) {
 static int
 exec_handler (const char *cmd_line) {
 	char *fn_copy = copy_user_string (cmd_line);
-	if (fn_copy == NULL)
-		return -1;
+	if (fn_copy == NULL) return -1;
 	return process_exec (fn_copy);
 }
 
@@ -367,4 +365,40 @@ close_all_files (struct thread *t) {
 void
 syscall_process_cleanup (void) {
 	close_all_files (thread_current ());
+}
+
+bool
+syscall_duplicate_fds (struct thread *parent, struct thread *child) {
+	ASSERT (parent != NULL);
+	ASSERT (child != NULL);
+
+	if (!parent->fds_initialized)
+		return true;
+	if (!child->fds_initialized) {
+		list_init (&child->file_descriptors);
+		child->next_fd = 2;
+		child->fds_initialized = true;
+	}
+
+	for (struct list_elem *e = list_begin (&parent->file_descriptors); e != list_end (&parent->file_descriptors); e = list_next (e)) {
+		struct file_descriptor *parent_fd = list_entry (e, struct file_descriptor, elem);
+		struct file_descriptor *child_fd = malloc (sizeof *child_fd);
+		if (child_fd == NULL) {
+			close_all_files (child);
+			return false;
+		}
+		lock_acquire (&filesys_lock);
+		struct file *duplicated_file = file_duplicate (parent_fd->file);
+		lock_release (&filesys_lock);
+		if (duplicated_file == NULL) {
+			free (child_fd);
+			close_all_files (child);
+			return false;
+		}
+		child_fd->fd = parent_fd->fd;
+		child_fd->file = duplicated_file;
+		list_push_back (&child->file_descriptors, &child_fd->elem);
+	}
+	child->next_fd = parent->next_fd;
+	return true;
 }
