@@ -11,6 +11,7 @@
 #include "filesys/filesys.h"
 #include "devices/input.h"
 #include "userprog/process.h"
+#include "lib/string.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *f);
@@ -28,6 +29,8 @@ void syscall_write(struct intr_frame *f);
 void syscall_seek(struct intr_frame *f);
 void syscall_tell(struct intr_frame *f);
 void syscall_close(struct intr_frame *f);
+void check_buf_address(struct intr_frame *f, char *buf, unsigned size);
+void check_string_address(struct intr_frame *f, char *str_addr);
 
 struct lock filesys_lock;
 
@@ -121,7 +124,7 @@ void syscall_exit(struct intr_frame *f){
 void syscall_fork(struct intr_frame *f){
 	char *name = f->R.rdi;
 
-	check_address(f, name);
+	check_string_address(f, name);
 
 	tid_t return_fork = process_fork(name, f);
 	if(return_fork == TID_ERROR){
@@ -134,7 +137,7 @@ void syscall_fork(struct intr_frame *f){
 
 void syscall_exec(struct intr_frame *f){
 	char *file = f->R.rdi;
-	check_address(f, file);
+	check_string_address(f, file);
 	int result = process_exec(file);
 	if(result == -1){
 		f->R.rdi = -1;
@@ -150,7 +153,7 @@ void syscall_wait(struct intr_frame *f){
 void syscall_create(struct intr_frame *f){
 	char *file = f->R.rdi;
 	unsigned initial_size = f->R.rsi;
-	check_address(f, file);
+	check_string_address(f, file);
 	lock_acquire(&filesys_lock);
 	f->R.rax = filesys_create(file, initial_size);
 	lock_release(&filesys_lock);
@@ -158,7 +161,7 @@ void syscall_create(struct intr_frame *f){
 
 void syscall_remove(struct intr_frame *f){
 	char *file = f->R.rdi;
-	check_address(f, file);
+	check_string_address(f, file);
 	lock_acquire(&filesys_lock);
 	f->R.rax = filesys_remove(file);
 	lock_release(&filesys_lock);
@@ -166,7 +169,7 @@ void syscall_remove(struct intr_frame *f){
 
 void syscall_open(struct intr_frame *f){
 	char *name = (char *)f->R.rdi;
-	check_address(f, name);
+	check_string_address(f, name);
 	lock_acquire(&filesys_lock);
 	struct file *open_file = filesys_open (name);
 	lock_release(&filesys_lock);
@@ -187,9 +190,11 @@ void syscall_open(struct intr_frame *f){
 
 void syscall_filesize(struct intr_frame *f){
 	int fd = f->R.rdi;
-	lock_acquire(&filesys_lock);
-	f->R.rax = file_length(thread_current()->fdt[fd]);
-	lock_release(&filesys_lock);
+	if(fd>=2 && fd<64){
+		lock_acquire(&filesys_lock);
+		f->R.rax = file_length(thread_current()->fdt[fd]);
+		lock_release(&filesys_lock);
+	}
 }
 
 void syscall_read(struct intr_frame *f){
@@ -198,7 +203,7 @@ void syscall_read(struct intr_frame *f){
 	unsigned size = f->R.rdx;
 	struct thread *curr = thread_current();
 
-	check_address(f, buffer);
+	check_buf_address(f, buffer, size);
 
 	if(fd == 0){
 		for(unsigned i=0; i<size; i++){
@@ -227,7 +232,7 @@ void syscall_write(struct intr_frame *f){
 	unsigned size = f->R.rdx;
 	struct thread *curr = thread_current();
 
-	check_address(f, buf);
+	check_buf_address(f, buf, size);
 	
 	lock_acquire(&filesys_lock);
 	if(fd == 0){
@@ -302,13 +307,41 @@ void syscall_close(struct intr_frame *f){
 
 }
 
-void check_address(struct intr_frame *f, char *buf){
-	if(buf == NULL || !is_user_vaddr(buf)){
+void check_buf_address(struct intr_frame *f, char *buf, unsigned size){
+
+	char *end = buf + size;
+
+	if(buf == NULL){
 		f->R.rdi = -1;
 		syscall_exit(f);
 	}
-	if(pml4_get_page(thread_current()->pml4, buf) == NULL){
+
+	while(buf < end){
+		if(!is_user_vaddr(buf) || pml4_get_page(thread_current()->pml4, buf) == NULL){
+			f->R.rdi = -1;
+			syscall_exit(f);
+		}
+
+		buf = (char *)pg_round_down(buf) + 4096;
+	}
+}
+
+void check_string_address(struct intr_frame *f, char *str_addr){
+
+	if(str_addr == NULL){
 		f->R.rdi = -1;
 		syscall_exit(f);
 	}
+
+	while(true){
+		if(!is_user_vaddr(str_addr) || pml4_get_page(thread_current()->pml4, str_addr) == NULL){
+			f->R.rdi = -1;
+			syscall_exit(f);
+		}
+		if(str_addr[0] == '\0'){
+			break;
+		}
+		str_addr += 1;
+	}
+
 }

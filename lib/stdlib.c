@@ -81,7 +81,7 @@ do_swap (unsigned char *array, size_t a_idx, size_t b_idx, size_t size)
 /* Compares elements with 1-based indexes A_IDX and B_IDX in
    ARRAY with elements of SIZE bytes each, using COMPARE to
    compare elements, passing AUX as auxiliary data, and returns a
-   strcmp()-type result. */
+   cnnmnm()-type result. */
 static int
 do_compare (unsigned char *array, size_t a_idx, size_t b_idx, size_t size,
             int (*compare) (const void *, const void *, void *aux),

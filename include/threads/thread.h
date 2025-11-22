@@ -110,6 +110,8 @@ struct thread {
 	struct list_elem elem_whole;
 	int64_t wakeup_tick;
 
+#ifdef USERPROG
+
 	//페이지 테이블의 최상위 주소를 담는 포인터
 	uint64_t *pml4;                     /* Page map level 4 */
 
@@ -126,22 +128,6 @@ struct thread {
 
 	//현재 실행중인 파일을 close하기 위한 FILE
 	struct file *running_file;
-
-#ifdef USERPROG
-
-	// //페이지 테이블의 최상위 주소를 담는 포인터
-	// uint64_t *pml4;                     /* Page map level 4 */
-
-	// //부모 프로세스에 thread의 종료 상태를 전달하기 위한 변수
-	// int exit_status;
-
-	// //파일 디스크립터 테이블
-	// struct file **fdt;
-
-	// //자식 쓰레드들의 리스트
-	// struct list child_list;
-	// struct list_elem elem_for_parent;
-	// struct semaphore child_sema;
 
 #endif
 #ifdef VM
