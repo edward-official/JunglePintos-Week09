@@ -11,7 +11,7 @@ Booting from Hard Disk..Kernel command line: -q -f put rox-child put child-rox r
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  235,520,000 loops/s.
+Calibrating timer...  261,734,400 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -36,12 +36,12 @@ child-rox: exit(12)
 (rox-child) end
 rox-child: exit(0)
 Execution of 'rox-child' complete.
-Timer: 93 ticks
-Thread: 45 idle ticks, 41 kernel ticks, 7 user ticks
+Timer: 94 ticks
+Thread: 44 idle ticks, 40 kernel ticks, 10 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 182 reads, 548 writes
 hd1:0: 254 reads, 0 writes
-Console: 1229 characters output
+Console: 1230 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

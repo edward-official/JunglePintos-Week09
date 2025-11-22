@@ -5,14 +5,13 @@ iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+0138B4A0+012CB4A0 CA00
 Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
 
 
-Booting from Hard Disk...
-Kernel command line: -q -f put create-null run create-null
+Booting from Hard Disk..Kernel command line: -q -f put create-null run create-null
 0 ~ 9fc00 1
 100000 ~ 13e0000 1
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  261,734,400 loops/s.
+Calibrating timer...  222,412,800 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -25,8 +24,8 @@ Executing 'create-null':
 (create-null) begin
 create-null: exit(-1)
 Execution of 'create-null' complete.
-Timer: 74 ticks
-Thread: 39 idle ticks, 33 kernel ticks, 3 user ticks
+Timer: 77 ticks
+Thread: 36 idle ticks, 38 kernel ticks, 3 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 85 reads, 266 writes
 hd1:0: 119 reads, 0 writes

@@ -11,7 +11,7 @@ Booting from Hard Disk..Kernel command line: -q -f put wait-killed put child-bad
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  219,136,000 loops/s.
+Calibrating timer...  314,163,200 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -30,8 +30,8 @@ child-bad: exit(-1)
 (wait-killed) end
 wait-killed: exit(0)
 Execution of 'wait-killed' complete.
-Timer: 90 ticks
-Thread: 43 idle ticks, 44 kernel ticks, 3 user ticks
+Timer: 89 ticks
+Thread: 48 idle ticks, 38 kernel ticks, 3 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 181 reads, 514 writes
 hd1:0: 238 reads, 0 writes

@@ -139,8 +139,8 @@ page_fault (struct intr_frame *f) {
 
 	if (user)
 	{
-		f->R.rdi = -1;
-		syscall_exit(f);
+      thread_current()->exit_status = -1;
+      thread_exit();
 	}
 	
 

@@ -11,7 +11,7 @@ Booting from Hard Disk..Kernel command line: -q -f put wait-twice put child-simp
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  222,412,800 loops/s.
+Calibrating timer...  261,734,400 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -30,8 +30,8 @@ child-simple: exit(81)
 (wait-twice) end
 wait-twice: exit(0)
 Execution of 'wait-twice' complete.
-Timer: 98 ticks
-Thread: 45 idle ticks, 47 kernel ticks, 6 user ticks
+Timer: 88 ticks
+Thread: 43 idle ticks, 41 kernel ticks, 4 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 163 reads, 510 writes
 hd1:0: 236 reads, 0 writes

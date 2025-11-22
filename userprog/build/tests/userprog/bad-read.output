@@ -11,7 +11,7 @@ Booting from Hard Disk..Kernel command line: -q -f put bad-read run bad-read
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  261,734,400 loops/s.
+Calibrating timer...  210,124,800 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -24,8 +24,8 @@ Executing 'bad-read':
 (bad-read) begin
 bad-read: exit(-1)
 Execution of 'bad-read' complete.
-Timer: 74 ticks
-Thread: 36 idle ticks, 36 kernel ticks, 2 user ticks
+Timer: 81 ticks
+Thread: 39 idle ticks, 42 kernel ticks, 1 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 85 reads, 266 writes
 hd1:0: 119 reads, 0 writes

@@ -117,7 +117,6 @@ syscall_handler (struct intr_frame *f) {
 void syscall_exit(struct intr_frame *f){
 	int status = f->R.rdi;
 	thread_current()->exit_status = status;
-	printf("%s: exit(%d)\n", thread_name(), status);
 	thread_exit();
 }
 

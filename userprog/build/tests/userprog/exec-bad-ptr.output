@@ -11,7 +11,7 @@ Booting from Hard Disk..Kernel command line: -q -f put exec-bad-ptr run exec-bad
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  209,715,200 loops/s.
+Calibrating timer...  235,520,000 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -24,8 +24,8 @@ Executing 'exec-bad-ptr':
 (exec-bad-ptr) begin
 exec-bad-ptr: exit(-1)
 Execution of 'exec-bad-ptr' complete.
-Timer: 90 ticks
-Thread: 41 idle ticks, 48 kernel ticks, 2 user ticks
+Timer: 74 ticks
+Thread: 39 idle ticks, 34 kernel ticks, 1 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 84 reads, 266 writes
 hd1:0: 119 reads, 0 writes

@@ -25,7 +25,7 @@ Executing 'open-null':
 open-null: exit(-1)
 Execution of 'open-null' complete.
 Timer: 75 ticks
-Thread: 39 idle ticks, 34 kernel ticks, 2 user ticks
+Thread: 39 idle ticks, 35 kernel ticks, 1 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 84 reads, 266 writes
 hd1:0: 119 reads, 0 writes

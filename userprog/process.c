@@ -324,6 +324,10 @@ process_exit (void) {
 
 	lock_release(&filesys_lock);
 
+	if (curr->pml4 != NULL) {
+        printf("%s: exit(%d)\n", curr->name, curr->exit_status);
+    }
+
 	sema_up(&curr->child_sema);
 
 	process_cleanup ();
