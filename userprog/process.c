@@ -288,16 +288,28 @@ int
 process_wait (tid_t child_tid) {
 
 	struct thread *curr = thread_current();
+	int temp_exit_status;
 
 	if(!list_empty(&curr->child_list)){
-		for(struct list_elem *i=list_front(&curr->child_list); i!=list_end(&curr->child_list); i = list_next(i)){
-			struct thread *temp_thread = list_entry(i, struct thread, elem_for_parent);
-			if(temp_thread->tid == child_tid){
-				sema_down(&temp_thread->child_sema);
-				list_remove(&temp_thread->elem_for_parent);
-				return temp_thread->exit_status;
+
+		for(struct list_elem *i=list_begin(&curr->child_list); i!=list_end(&curr->child_list); i = list_next(i)){
+
+			struct child_info *temp_info = list_entry(i, struct child_info, elem_for_parent);
+
+			if(temp_info->tid == child_tid){
+
+				sema_down(&temp_info->child_sema);
+				list_remove(&temp_info->elem_for_parent);
+				temp_exit_status = temp_info->exit_status;
+				free(temp_info);
+
+				return temp_exit_status;
+
+				break;			
 			}
+
 		}
+
 	}
 
 	return -1;
@@ -328,7 +340,9 @@ process_exit (void) {
         printf("%s: exit(%d)\n", curr->name, curr->exit_status);
     }
 
-	sema_up(&curr->child_sema);
+	curr->info->exit_status = curr->exit_status;
+
+	sema_up(&curr->info->child_sema);
 
 	process_cleanup ();
 }

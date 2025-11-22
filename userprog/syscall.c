@@ -115,8 +115,9 @@ syscall_handler (struct intr_frame *f) {
 }
 
 void syscall_exit(struct intr_frame *f){
+	struct thread *curr = thread_current();
 	int status = f->R.rdi;
-	thread_current()->exit_status = status;
+	curr->exit_status = status;
 	thread_exit();
 }
 
@@ -170,7 +171,7 @@ void syscall_open(struct intr_frame *f){
 	char *name = (char *)f->R.rdi;
 	check_string_address(f, name);
 	lock_acquire(&filesys_lock);
-	struct file *open_file = filesys_open (name);
+	struct file *open_file = filesys_open(name);
 	lock_release(&filesys_lock);
 	f->R.rax = -1;
 	if(open_file == NULL){

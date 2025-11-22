@@ -12,6 +12,7 @@
 #include "threads/palloc.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #include "intrinsic.h"
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -211,6 +212,7 @@ thread_print_stats (void) {
    The code provided sets the new thread's `priority' member to
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
+
 tid_t
 thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
@@ -247,15 +249,18 @@ thread_create (const char *name, int priority,
 	//NOTE : syscall_open 추가
 	t->fdt = palloc_get_multiple(PAL_ZERO, 1);
 	if(t->fdt == NULL){
-		PANIC("Failed to allocate FDT page");
+		return TID_ERROR;
 	}
 
 	t->fdt[0] = (void *)1;
 	t->fdt[1] = (void *)2;
 
-	//NOTE: 부모 쓰레드에 자식 쓰레드 elem를 넣어주기 위한 푸쉬
-	list_push_back(&thread_current()->child_list, &t->elem_for_parent);
-	sema_init(&t->child_sema, 0);
+	//NOTE: 부모 쓰레드에 child_info의 elem를 넣어주기 위한 푸쉬
+	struct child_info *info = malloc(sizeof(struct child_info));
+	t->info = info;
+	info->tid = tid;
+	list_push_back(&thread_current()->child_list, &info->elem_for_parent);
+	sema_init(&info->child_sema, 0);
 
 	/* Add to run queue. */
 	thread_unblock (t);

@@ -8,6 +8,7 @@ threads/thread.o: ../../threads/thread.c ../../include/threads/thread.h \
  ../../include/devices/timer.h ../../include/lib/round.h \
  ../../include/threads/flags.h ../../include/threads/intr-stubs.h \
  ../../include/threads/palloc.h ../../include/threads/vaddr.h \
- ../../include/threads/loader.h ../../include/intrinsic.h \
- ../../include/threads/mmu.h ../../include/threads/pte.h \
- ../../include/userprog/process.h ../../include/userprog/syscall.h
+ ../../include/threads/loader.h ../../include/threads/malloc.h \
+ ../../include/intrinsic.h ../../include/threads/mmu.h \
+ ../../include/threads/pte.h ../../include/userprog/process.h \
+ ../../include/userprog/syscall.h
