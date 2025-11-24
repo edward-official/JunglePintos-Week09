@@ -301,6 +301,7 @@ void syscall_wait (struct intr_frame *f){
 }
 
 void syscall_exec (struct intr_frame *f){
-	// TODO: Not implemented
-	// 이 함수는 fork-once에 필요하지 않을 수 있지만, 다른 테스트를 위해 구현해야 한다. 
+	const char *cmd_line = (const char *)f->R.rdi;
+	check_address((void *)cmd_line, f);
+	f->R.rax = process_exec((void *)cmd_line);
 }
