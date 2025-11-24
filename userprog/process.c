@@ -23,8 +23,6 @@
 #ifdef VM
 #include "vm/vm.h"
 #endif
-
-static struct semaphore child_sema;
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -70,8 +68,6 @@ process_create_initd (const char *file_name) {
 	char *fn_copy;			//file_name의 복사본을 저장할 포인터
 	tid_t tid;				//새로 생성될 쓰레드의 ID (프로세스 ID의 역할)
 
-	sema_init(&child_sema, 0);
-
 	/* FILE_NAME을 복사하는 이유
 	file_name은 이 함수를 호출한 곳(caller)의 메모리 공간에 있을 수 있다.
 	thread_create()는 새 쓰레드를 만들고, 그 쓰레드는 나중에 load() 함수를 호출하여 file_name을 사용한다.
@@ -94,6 +90,21 @@ process_create_initd (const char *file_name) {
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
+}
+/* tid를 이용해 현재 프로세스의 자식 리스트에서 해당 자식 스레드를 찾는 함수 */
+struct thread *get_child_process(tid_t child_tid) {
+    struct thread *parent = thread_current();
+    struct list *children = &parent->children;
+
+    /* 자식 리스트를 순회하며 tid가 일치하는 자식을 찾습니다. */
+    for (struct list_elem *e = list_begin(children); e != list_end(children); e = list_next(e)) {
+        struct thread *child = list_entry(e, struct thread, child_elem);
+        if (child->tid == child_tid) {
+            return child; /* 자식을 찾으면 해당 스레드 포인터를 반환합니다. */
+        }
+    }
+    /* 리스트를 모두 찾아도 없으면 NULL을 반환합니다. */
+    return NULL;
 }
 
 /* 첫 번째 사용자 프로세스를 실행시키는 쓰레드 함수 */
@@ -293,7 +304,6 @@ process_exec (void *f_name) {
 	NOT_REACHED ();
 }
 
-
 /* Waits for thread TID to die and returns its exit status.  If
  * it was terminated by the kernel (i.e. killed due to an
  * exception), returns -1.  If TID is invalid or if it was not a
@@ -304,24 +314,24 @@ process_exec (void *f_name) {
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) { /*
-	TODO  4. `process_wait(tid)` (`userprog/process.c`)
+process_wait (tid_t child_tid) {
+	/* 1. 자식 리스트에서 child_tid에 해당하는 자식 스레드를 찾습니다. */
+	struct thread *child = get_child_process(child_tid);
 
-   * 호출 방식: main 스레드는 process_create_initd로부터 반환받은 tid를 인자로 하여 process_wait를 호출합니다.
-   * 내부 동작 및 상태 변화:
-       1. 자식 찾기: main 스레드는 자신의 자식 리스트(구현 필요)를 순회하여 tid에 해당하는 자식의 struct thread 포인터를 찾습니다.
-       2. 세마포어 대기: 찾은 자식의 struct thread 내부에 있는 "종료 신호"용 세마포어(예: wait_sema)에 대해 sema_down()을 호출합니다.
-       3. 상태 변화: sema_down이 호출되는 순간, main 스레드의 상태는 THREAD_BLOCKED로 변경되고, ready_list에서 제거됩니다. CPU
-          스케줄러는 이제 다른 스레드(아마도 방금 생성된 initd 스레드)를 실행할 것입니다. main 스레드는 자식이 sema_up을 호출해줄 때까지
-          이 sema_down 함수 안에서 영원히 잠들어 있게 됩니다.
-		  */ 
-	
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
+	/* 자식을 찾지 못했거나, 이미 wait한 자식인 경우 -1을 반환합니다. */
+	if (child == NULL) {
+		return -1;
+	}
 
-	sema_down(&child_sema);
-	return -1;
+	/* 2. 자식의 wait_sema를 사용하여 자식이 종료될 때까지 기다립니다. */
+	sema_down(&child->wait_sema);
+
+	/* 3. 자식이 남긴 종료 상태를 가져오고, 부모의 자식 리스트에서 제거합니다. */
+	int exit_status = child->exit_status;
+	list_remove(&child->child_elem);
+
+	/* 4. 자식의 종료 상태를 반환합니다. */
+	return exit_status;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -332,7 +342,10 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	sema_up(&child_sema);
+	
+	/* 자신을 기다리는 부모가 있다면, 자신의 wait_sema를 up하여 깨워줍니다. */
+	sema_up(&curr->wait_sema);
+
 	process_cleanup ();
 }
 
