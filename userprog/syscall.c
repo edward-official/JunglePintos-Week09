@@ -37,10 +37,10 @@ void syscall_wait (struct intr_frame *f);
 void syscall_exec (struct intr_frame *f);
 
 /*'syscall_init(void)
-	*역할: 시스템 콜 메커니즘을 단 한번 초기화함
+	*역할: 시스템 콜 메커니즘을 단 한번 초기화한다.
 	*동작: Pintos가 부팅될 때 호출된다. 이 함수는 CPU에게 "앞으로 int0x30이라는 인터럽트가 발생하면,
 	무조건 syscall_handler 함수를 실행시켜라"고 등록하는 역할을 한다. 사용자 프로그램의 모든 시스템 콜 함수
-	(C 라이브러리의 write, exec 등)는 내부적으로 int $0x30 명령어를 실행하도록 만들어졌다.*/
+	(C 라이브러리의 write, exec 등)는 내부적으로 int $0x30 명령어를 실행하도록 만들어졌다. */
 void
 syscall_init (void) {
 	//시스템 콜이 발생하고 끝날 때, 어떤 권한으로 전환할지 CPU에게 알려주는 규칙 설정 단계
@@ -49,22 +49,22 @@ syscall_init (void) {
 	write_msr(MSR_STAR, ((uint64_t)SEL_UCSEG - 0x10) << 48  |
 			((uint64_t)SEL_KCSEG) << 32);
 
-	//SYSCALL이 호출될 때, 어디로 점프해서 코드를 실행 시작할지 CPU에게 알려주는 "목적지 주소 설정" 단계이다.
+	//SYSCALL이 호출될 때, 어디로 점프해서 코드를 실행 시작할지 CPU에게 알려주는 "목적지 주소 설정" 단계이다. 
 	//MSR_LSTAR: Long-mode System call Target Address Register의 약자. 이름 그대로 시스템 콜의 목적지 주소를 저장하는 레지스터
 	//(uint64_t) syscall_entry: syscall_entry는 시스템 콜이 발생했을 때 가장 먼저 실행되는 커널 코드의 시작 주소이다. (보통 어셈블리로 작성된 진입점 함수)
 	
-	//CPU의 실행 포인터(RIP)를 syscall_entry 함수의 주소로 즉시 옮겨라
+	//CPU의 실행 포인터(RIP)를 syscall_entry 함수의 주소로 즉시 옮기도록 설정한다.
 	write_msr(MSR_LSTAR, (uint64_t) syscall_entry);
 
-	//SYSCALL 진입 시, CPU의 상태 플래그 (RFLAGS)를 어떻게 변경할지 결정하는 "안전 프로토콜 설정"단계
+	//SYSCALL 진입 시, CPU의 상태 플래그 (RFLAGS)를 어떻게 변경할지 결정하는 "안전 프로토콜 설정" 단계이다.
 	//FLAG_IF: Interrupt Flag. 이 플래그가 켜져 있어야 하드웨어 인터럽트(키보드, 마우스, 타이머)를 받는다.
 	//마스크 값에 FLAG_IF가 포함되어 있으므로 SYSCALL이 호출되면 CPU는 자동으로 인터럽트를 비활성화한다.
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
 }
 
-/* syscall_handler(struct intr_frame *f) 
-	*역할: 모든 시스템 콜이 실제로 도착하는 중앙 처리소이다.
+/* syscall_handler(struct intr_frame *f)
+	*역할: 모든 시스템 콜이 실제로 도착하는 중앙 처리소이다. 
 	*세부 동작 흐름:
 		1. 시스템 콜 식별: 사용자 프로그램이 exec을 호출했는지, write를 호출했는지 알아낸다.
 		호출된 시스템 콜의 고유 번호는 f->RDI 레지스터 값에 저장되어 있다.
@@ -74,8 +74,8 @@ syscall_init (void) {
 		커널 영역을 침범하지는 않는지 반드시 검사한다. 이 검사에 실패하면 프로세스를 즉시 종료시킨다.
 		4. 기능 위임 및 실행: switch문을 통해 식별된 시스템 콜에 맞는 실제 처리 로직을 실행한다.
 		예를 들어 SYS_WRITE이고 fd가 1이라면, 콘솔에 글자를 출력하는 putbuf() 함수를 호출한다.
-		5. 결과 반환: 처리 결과를 f->RAX에 저장한다. syscall_handler가 리턴하면 커널은 f->RAX에 저장된 값을
-		사용자 프로그램에게 시스템 콜 함수의 최종 반환 값으로 전달해준다.*/
+		5. 결과 반환: 처리 결과를 f->RAX에 저장한다. syscall_handler가 리턴하면 커널은 f->RAX에 저장된 값을 
+		사용자 프로그램에게 시스템 콜 함수의 최종 반환 값으로 전달해준다. */
 
 
 	
@@ -152,7 +152,7 @@ syscall_init (void) {
 
 		if(file_to_close != NULL){
 			file_close(file_to_close);
-			// fd 테이블의 해당 슬롯을 비워서 재사용 가능하게 함
+			// fd 테이블의 해당 슬롯을 비워서 재사용 가능하게 한다.
 			thread_current()->fd_table[fd] = NULL;
 		}
 	}
@@ -302,5 +302,5 @@ void syscall_wait (struct intr_frame *f){
 
 void syscall_exec (struct intr_frame *f){
 	// TODO: Not implemented
-	// 이 함수는 fork-once에 필요하지 않을 수 있지만, 다른 테스트를 위해 구현해야 합니다.
+	// 이 함수는 fork-once에 필요하지 않을 수 있지만, 다른 테스트를 위해 구현해야 한다. 
 }

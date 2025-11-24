@@ -23,6 +23,8 @@
 #ifdef VM
 #include "vm/vm.h"
 #endif
+
+static struct semaphore child_sema;
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -43,8 +45,8 @@ process_fork, __do_fork, duplicate_pte*/
 
 
 /*
-역할: 프로세스 관련 자료구조를 초기화한다.
-동작: 현재 쓰레드(thread_current())의 프로세스 관련 정보를 초기화한다.
+역할: 프로세스 관련 자료구조를 초기화.
+동작: 현재 스레드(thread_current())의 프로세스 관련 정보를 초기화한다.
 */
 static void
 process_init (void) {
@@ -59,8 +61,8 @@ process_init (void) {
 }
 
 /* 
-역할: Pintos의 최초 사용자 프로세스 ("initd")를 생성한다.
-동작: process_create_initd는 initd라는 커널 쓰레드를 만든다. initd는 실행되자마자 
+역할: Pintos의 최초 사용자 프로세스 ("initd")를 생성.
+동작: process_create_initd는 initd라는 커널 스레드를 만든다. initd는 실행되자마자 
 process_exec을 호출하여 자기 자신을 첫 번째 사용자 프로세스로 변신시킨다. 
 */
 tid_t
@@ -68,23 +70,25 @@ process_create_initd (const char *file_name) {
 	char *fn_copy;			//file_name의 복사본을 저장할 포인터
 	tid_t tid;				//새로 생성될 쓰레드의 ID (프로세스 ID의 역할)
 
+	sema_init(&child_sema, 0);
+
 	/* FILE_NAME을 복사하는 이유
-	file_name은 이 함수를 호출한 곳(caller)의 메모리 공간에 있을 수 있다.
-	thread_create()는 새 쓰레드를 만들고, 그 쓰레드는 나중에 load() 함수를 호출하여 file_name을 사용한다.
+	file_name은 이 함수를 호출한 곳(caller)의 메모리 공간에 있을 수 있음.
+	thread_create()는 새 스레드를 만들고, 그 스레드는 나중에 load() 함수를 호출하여 file_name을 사용한다.
 	만약 caller가 file_name을 load()가 사용하기 전에 변경하거나 해제하면 문제가 발생(race condition)
 	이를 방지하기 위해 안전하게 커널 메모리에 복사본을 만든다. */
 
-	//동작: 커널 메모레에서 4kb (한 페이지)를 할당받고 file_name의 문자열 복사본을 저장한다. '0'플래그는 페이지를 0으로 초기화하지 않겠단 것
+	//동작: 커널 메모리에서 4kb (한 페이지)를 할당받고 file_name의 문자열 복사본을 저장한다. '0'플래그는 페이지를 0으로 초기화하지 않겠다는 의미.
 	fn_copy = palloc_get_page (0);
 	if (fn_copy == NULL)
 		return TID_ERROR;
-	//file_name 문자열은 fn_copy 공간으로 안전하게 복사한다.
+	//file_name 문자열을 fn_copy 공간으로 안전하게 복사한다.
 		strlcpy (fn_copy, file_name, PGSIZE);
 
 	
-	/* file_name을 실행할 새 쓰레드를 생선한다. */
+	/* file_name을 실행할 새 스레드를 생성한다. */
 
-	/*동작: 새로운 커널 쓰레드를 생성한다.
+	/*동작: 새로운 커널 스레드를 생성한다.
 	thread_create(쓰레드 이름, 쓰레드 기본 우선순위, 새로 생성된 쓰레드가 실행할 함수, 함수에게 전달될 인자)*/
 	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
@@ -96,29 +100,29 @@ struct thread *get_child_process(tid_t child_tid) {
     struct thread *parent = thread_current();
     struct list *children = &parent->children;
 
-    /* 자식 리스트를 순회하며 tid가 일치하는 자식을 찾습니다. */
+    /* 자식 리스트를 순회하며 tid가 일치하는 자식을 찾는다. */
     for (struct list_elem *e = list_begin(children); e != list_end(children); e = list_next(e)) {
         struct thread *child = list_entry(e, struct thread, child_elem);
         if (child->tid == child_tid) {
-            return child; /* 자식을 찾으면 해당 스레드 포인터를 반환합니다. */
+            return child; /* 자식을 찾으면 해당 스레드 포인터를 반환한다. */
         }
     }
-    /* 리스트를 모두 찾아도 없으면 NULL을 반환합니다. */
+    /* 리스트를 모두 찾아도 없으면 NULL을 반환한다. */
     return NULL;
 }
 
-/* 첫 번째 사용자 프로세스를 실행시키는 쓰레드 함수 */
+/* 첫 번째 사용자 프로세스를 실행시키는 스레드 함수 */
 static void
 initd (void *f_name) { //f_name은 process_create_initd에서 전달받은 프로그램 이름 문자열 포인터
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
-	//이 부분은 가상 메모리에서 사용, 보조 페이지 테이블(spt)를 초기화하는 코드
+	//이 부분은 가상 메모리에서 사용, 보조 페이지 테이블(spt)을 초기화하는 코드
 
-	//현재 쓰레드의 프로세스(이제 곧 프로세스가 될) 관련 정보를 초기화
+	//현재 스레드의 프로세스(이제 곧 프로세스가 될) 관련 정보를 초기화
 	process_init ();
 
-	/*process_exec(f_name): f_name에 해당하는 프로그램을 현재 실행중인 'init'쓰레드 위로 덮어씌우는(load) 작업 시도
+	/*process_exec(f_name): f_name에 해당하는 프로그램을 현재 실행중인 'init'스레드 위로 덮어씌우는(load) 작업 시도
 	성공시: process_exec 함수는 성공하면 절대 리턴하지 않음. 대신 do_iret()을 통해 사용자 프로그램의 첫 코드부터 실행 시작,
 	따라서 if문 안으로 돌아오지 않는다.
 	실패시: process_exec가 -1을 반환하는 경우. 최초의 프로세스를 띄우는데 실패한 것은 운영체제 입장에서
@@ -143,15 +147,15 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	struct semaphore fork_sema;
 	tid_t tid;
 
-	/* 1. 부모와 자식 간의 동기화를 위한 일회용 세마포어를 초기화합니다. */
+	/* 1. 부모와 자식 간의 동기화를 위한 일회용 세마포어를 초기화한다. */
 	sema_init(&fork_sema, 0);
 
-	/* 2. 자식에게 전달할 정보(부모, 인터럽트 프레임, 세마포어 주소)를 설정합니다. */
+	/* 2. 자식에게 전달할 정보(부모, 인터럽트 프레임, 세마포어 주소)를 설정한다. */
 	aux.parent = thread_current();
 	aux.if_ = if_;
 	aux.fork_sema = &fork_sema;
 
-	/* 3. 자식 스레드를 생성하고 정보 꾸러미(aux)를 전달합니다. */
+	/* 3. 자식 스레드를 생성하고 정보 꾸러미(aux)를 전달한다. */
 	tid = thread_create (name, PRI_DEFAULT, __do_fork, &aux);
 	if (tid == TID_ERROR)
 		return TID_ERROR;
@@ -173,36 +177,36 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	void *newpage;
 	bool writable;
 
-	/* 1. 가상 주소(va)가 커널 영역 주소이면 복제하지 않고 즉시 반환합니다.
-	 *    자식 프로세스는 부모의 유저 공간만 복제해야 합니다. */
+	/* 1. 가상 주소(va)가 커널 영역 주소이면 복제하지 않고 즉시 반환한다.
+	 *    자식 프로세스는 부모의 유저 공간만 복제해야 한다. */
 	if (is_kernel_vaddr(va)) {
 		return true;
 	}
 
 	/* 2. Resolve VA from the parent's page map level 4. */
-	/*    부모의 페이지 테이블에서 가상 주소(va)에 매핑된 물리 페이지 주소를 찾습니다. */
+	/*    부모의 페이지 테이블에서 가상 주소(va)에 매핑된 물리 페이지 주소를 찾는다. */
 	parent_page = pml4_get_page (parent->pml4, va);
 	if (parent_page == NULL) {
-		/* 부모에게 매핑되지 않은 페이지는 복제할 필요가 없습니다. */
+		/* 부모에게 매핑되지 않은 페이지는 복제할 필요가 없다. */
 		return true;
 	}
 
-	/* 3. 자식 프로세스를 위해 새로운 물리 페이지를 할당받습니다. */
+	/* 3. 자식 프로세스를 위해 새로운 물리 페이지를 할당받는다. */
 	newpage = palloc_get_page(PAL_USER | PAL_ZERO);
 	if (newpage == NULL) {
-		/* 메모리 할당에 실패하면 복제를 중단하고 false를 반환합니다. */
+		/* 메모리 할당에 실패하면 복제를 중단하고 false를 반환한다. */
 		return false;
 	}
 
-	/* 4. 부모 페이지의 내용을 자식을 위해 할당받은 새 페이지로 복사합니다. */
+	/* 4. 부모 페이지의 내용을 자식을 위해 할당받은 새 페이지로 복사한다. */
 	memcpy(newpage, parent_page, PGSIZE);
-	writable = is_writable(pte); // 부모 페이지의 쓰기 가능 여부를 확인합니다.
+	writable = is_writable(pte); // 부모 페이지의 쓰기 가능 여부를 확인한다.
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
-	/*    자식의 페이지 테이블에 가상주소(va)와 새 물리페이지(newpage)를 매핑합니다. */
+	/*    자식의 페이지 테이블에 가상주소(va)와 새 물리페이지(newpage)를 매핑한다. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
-		/* 6. 페이지 매핑에 실패하면 할당받았던 페이지를 해제하고 false를 반환합니다. */
+		/* 6. 페이지 매핑에 실패하면 할당받았던 페이지를 해제하고 false를 반환한다. */
 		palloc_free_page(newpage);
 		return false;
 	}
@@ -219,16 +223,16 @@ __do_fork (void *aux) {
 	struct fork_aux *args = aux;
 	struct intr_frame if_;
 	struct thread *parent = args->parent;
-	struct thread *current = thread_current (); // 현재 실행 중인 자식 스레드
-	/* 부모가 시스템 콜을 호출한 시점의 유저 컨텍스트를 가져옵니다. */
+	struct thread *current = thread_current (); // 현재 실행 중인 자식 스레드.
+	/* 부모가 시스템 콜을 호출한 시점의 유저 컨텍스트를 가져온다. */
 	struct intr_frame *parent_if = args->if_;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
-	/* 1. 부모의 CPU 문맥(레지스터 값)을 자식의 스택으로 복사합니다. */
+	/* 1. 부모의 CPU 문맥(레지스터 값)을 자식의 스택으로 복사한다. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
-	/* 자식 프로세스에서 fork의 반환 값은 0이어야 합니다.
-	 * rax 레지스터는 함수의 반환 값을 저장하는 데 사용됩니다. */
+	/* 자식 프로세스에서 fork의 반환 값은 0이어야 한다.
+	 * rax 레지스터는 함수의 반환 값을 저장하는 데 사용된다. */
 	if_.R.rax = 0;
 
 	/* 2. 페이지 테이블(메모리 공간)을 복제합니다. */
@@ -246,30 +250,30 @@ __do_fork (void *aux) {
 		goto error;
 #endif
 
-	/* 3. 부모의 파일 디스크립터 테이블을 복제합니다. */
-	// 표준 입출력(0, 1)을 제외한 파일들을 복제합니다.
+	/* 3. 부모의 파일 디스크립터 테이블을 복제한다. */
+	// 표준 입출력(0, 1)을 제외한 파일들을 복제한다.
 	for (int i = 2; i < FDT_COUNT_LIMIT; i++) {
 		struct file *file = parent->fd_table[i];
 		if (file != NULL) {
-			// file_duplicate는 동일한 파일을 가리키는 새 파일 객체를 만듭니다.
-			// 파일 오프셋 등은 공유하지만, 파일 디스크립터는 독립적입니다.
+			// file_duplicate는 동일한 파일을 가리키는 새 파일 객체를 만든다.
+			// 파일 오프셋 등은 공유하지만, 파일 디스크립터는 독립적이다.
 			current->fd_table[i] = file_duplicate(file);
 		}
 	}
 	current->next_fd = parent->next_fd;
 
-	/* 4. 부모-자식 관계를 설정하고, fork 완료 신호를 보냅니다. */
-	/* 부모가 전달해준 일회용 세마포어에 신호를 보내 깨워줍니다. */
+	/* 4. 부모-자식 관계를 설정하고, fork 완료 신호를 보낸다. */
+	/* 부모가 전달해준 일회용 세마포어에 신호를 보내 깨워준다. */
 	sema_up(args->fork_sema);
 
-/* 5. 모든 복제가 성공했으면, 사용자 모드로 전환하여 자식 프로세스 실행을 시작합니다. */
+/* 5. 모든 복제가 성공했으면, 사용자 모드로 전환하여 자식 프로세스 실행을 시작한다. */
 	if (succ)
 		do_iret (&if_);
 
 error:
 	current->exit_status = TID_ERROR; // 실패 시 종료 상태 설정
-	/* 복제 과정에서 오류 발생 시, 부모에게 실패를 알리고 스레드를 종료합니다. */
-	sema_up(args->fork_sema); // 실패했더라도 부모를 깨워야 합니다.
+	/* 복제 과정에서 오류 발생 시, 부모에게 실패를 알리고 스레드를 종료한다. */
+	sema_up(args->fork_sema); // 실패했더라도 부모를 깨워야 한다.
 	thread_exit ();
 }
 
@@ -278,7 +282,7 @@ error:
 int
 process_exec (void *f_name) {
 	char *file_name = f_name;
-	bool success;
+	bool success; 
 
 	/* We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
@@ -309,29 +313,29 @@ process_exec (void *f_name) {
  * exception), returns -1.  If TID is invalid or if it was not a
  * child of the calling process, or if process_wait() has already
  * been successfully called for the given TID, returns -1
- * immediately, without waiting.
+	 * immediately, without waiting. 
  *
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
 int
-process_wait (tid_t child_tid) {
-	/* 1. 자식 리스트에서 child_tid에 해당하는 자식 스레드를 찾습니다. */
-	struct thread *child = get_child_process(child_tid);
+process_wait (tid_t child_tid UNUSED) { /*
+	TODO  4. `process_wait(tid)` (`userprog/process.c`)
+	
+   * 호출 방식: main 스레드는 process_create_initd로부터 반환받은 tid를 인자로 하여 process_wait를 호출합니다.
+   * 내부 동작 및 상태 변화:
+       1. 자식 찾기: main 스레드는 자신의 자식 리스트(구현 필요)를 순회하여 tid에 해당하는 자식의 struct thread 포인터를 찾습니다.
+       2. 세마포어 대기: 찾은 자식의 struct thread 내부에 있는 "종료 신호"용 세마포어(예: wait_sema)에 대해 sema_down()을 호출합니다.
+       3. 상태 변화: sema_down이 호출되는 순간, main 스레드의 상태는 THREAD_BLOCKED로 변경되고, ready_list에서 제거됩니다. CPU
+          스케줄러는 이제 다른 스레드(아마도 방금 생성된 initd 스레드)를 실행할 것입니다. main 스레드는 자식이 sema_up을 호출해줄 때까지
+          이 sema_down 함수 안에서 영원히 잠들어 있게 됩니다.
+		  */ 
+	
+	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
+	 * XXX:       to add infinite loop here before
+	 * XXX:       implementing the process_wait. */
 
-	/* 자식을 찾지 못했거나, 이미 wait한 자식인 경우 -1을 반환합니다. */
-	if (child == NULL) {
-		return -1;
-	}
-
-	/* 2. 자식의 wait_sema를 사용하여 자식이 종료될 때까지 기다립니다. */
-	sema_down(&child->wait_sema);
-
-	/* 3. 자식이 남긴 종료 상태를 가져오고, 부모의 자식 리스트에서 제거합니다. */
-	int exit_status = child->exit_status;
-	list_remove(&child->child_elem);
-
-	/* 4. 자식의 종료 상태를 반환합니다. */
-	return exit_status;
+	sema_down(&child_sema);
+	return -1;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -342,10 +346,7 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	
-	/* 자신을 기다리는 부모가 있다면, 자신의 wait_sema를 up하여 깨워줍니다. */
-	sema_up(&curr->wait_sema);
-
+	sema_up(&child_sema);
 	process_cleanup ();
 }
 
@@ -377,10 +378,10 @@ process_cleanup (void) {
 }
 
 /* 모든 컨텍스트 스위치시 호출되는 함수.
-다음에 실행될 쓰레드에서 사용자 코드를 실행하기 위해 CPU를 설정한다. */
+다음에 실행될 스레드에서 사용자 코드를 실행하기 위해 CPU를 설정한다. */
 void
 process_activate (struct thread *next) {
-	/* 쓰레드의 페이지 테이블을 활성화한다.
+	/* 스레드의 페이지 테이블을 활성화한다.
 	1. pm14: 각 프로세스는 자신만의 독립적인 가상 메모리 주소 공간을 가진다.
 	pm14는 이 가상 주소를 실제 물리 주소로 변환하는 '주소 변환표'의 최상의 테이블이다.
 	즉 프로세스 A와 프로세스 V는 같은 가상 주소 0x400000을 사용하더라도,
@@ -389,19 +390,19 @@ process_activate (struct thread *next) {
 	3. 결과: 이 함수가 실행된 직후부터, CPU는 메모리에 접근할 때 next 프로세스의 주소 변환표(pm14)를 사용한다.
 	이로써 프로세스간의 메모리 공간이 완벽하게 격리된다. */
 	pml4_activate (next->pml4);
-
-	/*어떤 프로세스가 실행 중이든, 인터럽트가 발생하면 CPU는 항상 현재 실행중인 프로세스에 할당된 안전한 커널 스택으로 자동전환 */
+	
+	/*어떤 프로세스가 실행 중이든, 인터럽트가 발생하면 CPU는 항상 현재 실행중인 프로세스에 할당된 안전한 커널 스택으로 자동 전환한다. */
 	tss_update (next);
 }
 
 /* WLD 실행 파일의 구조를 해석하기 위한 상수들.
-Pintos가 사용자 프로그램을 메모리에 올리고 실행하려면 그 프로그램 파일이 어떤 형식으로 되어있는지 알아야 하는데
+Pintos가 사용자 프로그램을 메모리에 올리고 실행하려면 그 프로그램 파일이 어떤 형식으로 되어있는지 알아야 하는데,
 ELF가 바로 그 표준 형식이다. */
 #define EI_NIDENT 16
 
 
 /*프로그램 헤더: ELF 파일에는 "프로그램 헤더 테이블"이라는 것이 있다. 이 테이블의 각 항목(엔트리)은 실행 파일의
-특정 세그먼트에 대한 정보를 담고 있다. 세그먼트는 코드, 데이터, 스택 등 메모리에 로드될 수 있는 프로그램의 논리적인 부분을 의미한다.*/
+특정 세그먼트에 대한 정보를 담고 있다. 세그먼트는 코드, 데이터, 스택 등 메모리에 로드될 수 있는 프로그램의 논리적인 부분을 의미한다. */
 
 /*각 프로그램 헤더는 p_type이라는 필드를 가지며, 이 필드가 해당 세그먼트의 종류를 나타낸다.*/
 #define PT_NULL    0            /* Ignore. */
@@ -419,7 +420,7 @@ ELF가 바로 그 표준 형식이다. */
 
 /* ELF 파일 식별 정보 (16바이트)
 파일의 맨 앞 16바이트를 읽어 이 배열에 저장한다.
-배열의 첫 바이트가 매직 넘버)("\177ELF")와 일치하는지 확인하여
+배열의 첫 바이트가 매직 넘버("\177ELF")와 일치하는지 확인하여
 이 파일이 유효한 ELF 파일인지 가장 먼저 검사하고 64비트용 파일인지 등의 정보도 담겨있다 */
 struct ELF64_hdr {
 	unsigned char e_ident[EI_NIDENT];
@@ -462,10 +463,10 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* 실행 파일의 설계도(ELF)를 읽어 메모리에 실제로 배치하는 과정 */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
-	struct thread *t = thread_current ();   //현재 실행중인 쓰레드(프로세스)의 정보
+	struct thread *t = thread_current ();   //현재 실행중인 스레드(프로세스)의 정보
 	struct ELF ehdr;						//ELF 헤더 정보를 담을 구조체
 	struct file *file = NULL;				//실행 파일을 가리킬 파일 포인터
-	off_t file_ofs;							//파일 내에서 읽을 위치(오프셋)
+	off_t file_ofs;							//파일 내에서 읽을 위치(오프셋).
 	bool success = false;					//로딩 성공 여부 플래그
 	int i;
 
@@ -486,19 +487,19 @@ load (const char *file_name, struct intr_frame *if_) {
 		strlcpy(thread_current()->name, argv[0], sizeof(thread_current()->name));
 	}
 
-	/* 페이지 디렉토리(페이지 테이블)을 할당하고 활성화한다.
+	/* 페이지 디렉토리(페이지 테이블)를 할당하고 활성화한다.
 	이것이 새 프로세스를 위한 독립적인 메모리 지도가 된다. */
 
-	//새 프로세스를 위한 최상의 페이지 테이블(pm14)를 생성한다. 지금은 아무것도 없는 빈 지도 상태
+	//새 프로세스를 위한 최상위 페이지 테이블(pml4)을 생성한다. 지금은 아무것도 없는 빈 지도 상태.
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL){
 		printf("DEBUG: pml4_create() failed\n"); // [추가]
     	goto done;
 	}
-	//방금 만든 빈 지도를 CPU에게 사용하라고 알려준다. 이제부터 모든 메모리 접근은 이 새 지도를 통한다.
+	//방금 만든 빈 지도를 CPU에게 사용하라고 알려준다. 이제부터 모든 메모리 접근은 이 새 지도를 통한다. 
 	process_activate (thread_current ());
 
-	/* 파일 시스템을 통해 file_name에 해당하는 파일을 연다. */
+	/* 파일 시스템을 통해 file_name에 해당하는 파일을 연다. */ 
 	file = filesys_open (argv[0]);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
@@ -518,7 +519,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	}
 
-	/* 프로그램 헤더들을 읽는다. 설계도(ELF 헤더)를 바탕으로, 각 부분(세그먼트)에 대한 상세 정보를 하나씩 확인하는 과정이다.*/
+	/* 프로그램 헤더들을 읽는다. 설계도(ELF 헤더)를 바탕으로, 각 부분(세그먼트)에 대한 상세 정보를 하나씩 확인하는 과정이다. */
 	file_ofs = ehdr.e_phoff;
 	for (i = 0; i < ehdr.e_phnum; i++) {
 		struct Phdr phdr;
@@ -573,7 +574,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Set up stack. */
 	if (!setup_stack (if_))
 		goto done;
-
+	
 /*
  (높은 주소)
 +--------------------------------+ <-- USER_STACK (예: 0x8000000000)
@@ -595,25 +596,25 @@ load (const char *file_name, struct intr_frame *if_) {
 */
 	void *user_stack_addrs[64];
 
-	//스택에 데이터 넣기 1단계: 실제 문자열 데이터(ex: "echo", "x")넣기
+	//스택에 데이터 넣기 1단계: 실제 문자열 데이터(ex: "echo", "x") 넣기
 	for(int i = argc-1; i>=0; i--){
 		int len = strlen(argv[i]) + 1;
-		if_->rsp -= len; 		//NULL만큼 1을 더해줌
+		if_->rsp -= len; 		//NULL만큼 1을 더해준다.
 		memcpy((void *)if_->rsp, argv[i], strlen(argv[i])+1);	//argv[i] 전체가 가리키는 문자열을 rsp로 len만큼 복사
 		user_stack_addrs[i] = (void *)if_->rsp;
 	}
 	
-	//스택에 데이터 넣기 2단계: 워드 정렬 맞추기(패딩)
+	//스택에 데이터 넣기 2단계: 워드 정렬 맞추기(패딩).
 	while(if_->rsp % 8 != 0){
 		if_-> rsp -= 1;
 		*(uint8_t *)if_ -> rsp = 0;
 	}
 
-	//스택에 데이터 넣기 3단계:: NULL 넣기
+	//스택에 데이터 넣기 3단계: NULL 넣기
 	if_->rsp -= 8;
 	*(char **)if_->rsp = 0;
 
-	//스택에 데이터 넣기 4단계: argv 주소 저장
+	//스택에 데이터 넣기 4단계: argv 주소 저장.
 	for(int i = argc-1; i>=0; i--){
 		if_->rsp -= 8;
 		*(void **)if_->rsp = user_stack_addrs[i];
@@ -624,7 +625,7 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	if_->rsp -= 8;
 
-	//스택에 데이터 넣기 5단계: 가짜 반환값 저장
+	//스택에 데이터 넣기 5단계: 가짜 반환값 저장.
 	*(void **)if_->rsp = 0;
 
 	/* Start address. */
@@ -706,11 +707,11 @@ static bool install_page (void *upage, void *kpage, bool writable);
  * or disk read error occurs. */
 
  /*
- load 함수로부터 "어떤 파일의 어느 위치에서 얼마만큼의 데이터를 읽어 어떤 가상 주소에 어떤 권한으로 올려라"
- struct file *file: 데이터를 읽어올 실행 파일 포인터
- off_t ofs: file 내에세 데이터를 읽기 시작할 위치(오프셋)
- uint8_t *upage: 데이터를 올리기 시작할 사용자 가상 주소
- uint32_t read_bytes: file로부터 읽어야 할 총 데이터의 크기
+ load 함수로부터 "어떤 파일의 어느 위치에서 얼마만큼의 데이터를 읽어 어떤 가상 주소에 어떤 권한으로 올려라"는 지시를 받는다.
+ struct file *file: 데이터를 읽어올 실행 파일 포인터.
+ off_t ofs: file 내에서 데이터를 읽기 시작할 위치(오프셋).
+ uint8_t *upage: 데이터를 올리기 시작할 사용자 가상 주소.
+ uint32_t read_bytes: file로부터 읽어야 할 총 데이터의 크기.
  uint32_t zero_bytes: read_bytes를 다 읽은 후 0으로 채워야 할 데이터의 크기
  bool writable: 이 메모리 영역에 쓰기 권한을 부여할 지 여부
  */
@@ -718,9 +719,9 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
 	/*
-	1. read_bytes + zero_bytes(세그먼트의 총 메모리 크기)가 페이지(PGSIZE, 4KB) 크기의 배수여야 함.
-	2. upage(사용자 가상 주소)가 페이지 경계에 정확히 맞춰져 있어야 함
-	3. ofs(파일 오프셋)도 페이지 경계에 맞춰져 있어야 로딩이 단순해짐
+	1. read_bytes + zero_bytes(세그먼트의 총 메모리 크기)가 페이지(PGSIZE, 4KB) 크기의 배수여야 한다.
+	2. upage(사용자 가상 주소)가 페이지 경계에 정확히 맞춰져 있어야 한다.
+	3. ofs(파일 오프셋)도 페이지 경계에 맞춰져 있어야 로딩이 단순해진다.
 	*/
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
@@ -729,7 +730,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	//file에서 데이터를 읽기 시작할 위치(ofs)로 파일 포인터를 이동
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
-		/* 아직 파일에서 읽을 내용이 있거나 0으로 채울 부분이 남았다면 계속 while 루프를 실행 */
+		/* 아직 파일에서 읽을 내용이 있거나 0으로 채울 부분이 남았다면 계속 while 루프를 실행한다. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
@@ -738,15 +739,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		if (kpage == NULL)
 			return false;
 
-		/* 데이터를 담을 실제 물리 메모리 한 페이지를 커널로부터 할당. 실패(메모리 부족)하면 false.
-		kpage는 이 물리 페이지를 가리키는 커널 주소 */
+		/* 데이터를 담을 실제 물리 메모리 한 페이지를 커널로부터 할당. 실패(메모리 부족)하면 false를 반환.
+		kpage는 이 물리 페이지를 가리키는 커널 주소이다. */
 		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
 			palloc_free_page (kpage);
 			return false;
 		}
 		memset (kpage + page_read_bytes, 0, page_zero_bytes);
 		
-		/* install_page 함수를 호출하여, 사용자 가상 주소(upage)와 실제 데이터가 담긴 물리 페이지(kpage)를
+		/* install_page 함수를 호출하여, 사용자 가상 주소(upage)와 실제 데이터가 담긴 물리 페이지(kpage)를 
 		페이지 테이블에 기록하여 연결한다. 이로써 프로세스가 upage 주소에 접근하면 실제로는 kpage에 접근한다.
 		writable 권한도 이 때 설정된다. */
 		if (!install_page (upage, kpage, writable)) {
@@ -780,14 +781,14 @@ setup_stack (struct intr_frame *if_) {
 }
 
 /* 앞서 load_segment가 물리 페이지에 데이터 채우기까지 했다면, 가상 주소를 부여하고 등록하는 역할
-*upage: 사용자 프로그램이 사용할 가상 주소(예: 0x4001000)
-*kpage: 실제 데이터가 저장된 물리 페이지를 가리키는 커널 주소 (palloc_get_page로 할당받은 그 주소)
-*bool writable: 이 페이지에 쓰기를 허용할지 아니면 읽기만 허용할지 권한 정보 */
+*upage: 사용자 프로그램이 사용할 가상 주소(예: 0x4001000).
+*kpage: 실제 데이터가 저장된 물리 페이지를 가리키는 커널 주소 (palloc_get_page로 할당받은 그 주소).
+*bool writable: 이 페이지에 쓰기를 허용할지 아니면 읽기만 허용할지 권한 정보. */
 static bool
 install_page (void *upage, void *kpage, bool writable) {
 	struct thread *t = thread_current ();
 
-	/* 해당 가상 주소에 이미 매핑된 페이지가 있는지 없는지 확인하고
+	/* 해당 가상 주소에 이미 매핑된 페이지가 없는지 확인하고,
 	우리의 페이지을 그 곳에 매핑 */
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
