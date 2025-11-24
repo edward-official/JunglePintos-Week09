@@ -117,19 +117,38 @@ initd (void *f_name) { //f_name은 process_create_initd에서 전달받은 프�
 	NOT_REACHED ();
 }
 
+/* fork를 위한 정보 전달용 구조체 */
+struct fork_aux {
+	struct thread *parent;
+	struct intr_frame *if_;
+	struct semaphore *fork_sema;
+};
+
 /* Clones the current process as `name`. Returns the new process's thread id, or
  * TID_ERROR if the thread cannot be created. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
-	struct thread *parent = thread_current();
+	struct fork_aux aux;
+	struct semaphore fork_sema;
+	tid_t tid;
 
-	/* __do_fork 함수를 실행할 자식 스레드를 생성합니다.
-	 * 네 번째 인자로 부모 스레드(parent)의 포인터를 넘겨주어,
-	 * 자식이 부모의 컨텍스트에 접근할 수 있도록 합니다. */
-	tid_t child_tid = thread_create (name, PRI_DEFAULT, __do_fork, parent);
+	/* 1. 부모와 자식 간의 동기화를 위한 일회용 세마포어를 초기화합니다. */
+	sema_init(&fork_sema, 0);
 
-	/* 스레드 생성에 실패하면 에러를 반환합니다. */
-	return child_tid;
+	/* 2. 자식에게 전달할 정보(부모, 인터럽트 프레임, 세마포어 주소)를 설정합니다. */
+	aux.parent = thread_current();
+	aux.if_ = if_;
+	aux.fork_sema = &fork_sema;
+
+	/* 3. 자식 스레드를 생성하고 정보 꾸러미(aux)를 전달합니다. */
+	tid = thread_create (name, PRI_DEFAULT, __do_fork, &aux);
+	if (tid == TID_ERROR)
+		return TID_ERROR;
+
+	/* 4. 자식이 준비를 마칠 때까지(sema_up 호출) 기다립니다. */
+	sema_down(&fork_sema);
+
+	return tid;
 }
 
 #ifndef VM
@@ -186,12 +205,12 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
  *       this function. */
 static void
 __do_fork (void *aux) {
+	struct fork_aux *args = aux;
 	struct intr_frame if_;
-	struct thread *parent = (struct thread *) aux; // process_fork에서 전달된 부모 스레드
+	struct thread *parent = args->parent;
 	struct thread *current = thread_current (); // 현재 실행 중인 자식 스레드
-	/* process_fork의 인자인 if_는 시스템 콜 핸들러의 인터럽트 프레임입니다.
-	 * 부모의 유저 컨텍스트는 부모 스레드의 tf 멤버에 저장되어 있습니다. */
-	struct intr_frame *parent_if = &parent->tf;
+	/* 부모가 시스템 콜을 호출한 시점의 유저 컨텍스트를 가져옵니다. */
+	struct intr_frame *parent_if = args->if_;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
@@ -229,16 +248,17 @@ __do_fork (void *aux) {
 	current->next_fd = parent->next_fd;
 
 	/* 4. 부모-자식 관계를 설정하고, fork 완료 신호를 보냅니다. */
-	sema_up(&current->fork_sema);
+	/* 부모가 전달해준 일회용 세마포어에 신호를 보내 깨워줍니다. */
+	sema_up(args->fork_sema);
 
 /* 5. 모든 복제가 성공했으면, 사용자 모드로 전환하여 자식 프로세스 실행을 시작합니다. */
 	if (succ)
 		do_iret (&if_);
 
 error:
+	current->exit_status = TID_ERROR; // 실패 시 종료 상태 설정
 	/* 복제 과정에서 오류 발생 시, 부모에게 실패를 알리고 스레드를 종료합니다. */
-	current->exit_status = -1; // 실패 플래그
-	sema_up(&current->fork_sema); // 실패했더라도 부모를 깨워야 합니다.
+	sema_up(args->fork_sema); // 실패했더라도 부모를 깨워야 합니다.
 	thread_exit ();
 }
 
