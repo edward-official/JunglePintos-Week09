@@ -28,6 +28,7 @@ static struct semaphore child_sema;
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
+struct thread *get_child_process(tid_t child_tid);
 static void __do_fork (void *);
 
 /*그룹 1: 핵심 프로세스 관리 (생명주기 관리)
@@ -56,8 +57,6 @@ process_init (void) {
 	current->fd_table = palloc_get_page(PAL_ZERO);
 	if(current->fd_table == NULL)
 		return;
-
-
 
 }
 
@@ -122,9 +121,15 @@ initd (void *f_name) { //f_name은 process_create_initd에서 전달받은 프�
  * TID_ERROR if the thread cannot be created. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
-	/* Clone current thread to new thread.*/
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, thread_current ());
+	struct thread *parent = thread_current();
+
+	/* __do_fork 함수를 실행할 자식 스레드를 생성합니다.
+	 * 네 번째 인자로 부모 스레드(parent)의 포인터를 넘겨주어,
+	 * 자식이 부모의 컨텍스트에 접근할 수 있도록 합니다. */
+	tid_t child_tid = thread_create (name, PRI_DEFAULT, __do_fork, parent);
+
+	/* 스레드 생성에 실패하면 에러를 반환합니다. */
+	return child_tid;
 }
 
 #ifndef VM
@@ -133,27 +138,43 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 static bool
 duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	struct thread *current = thread_current ();
-	struct thread *parent = (struct thread *) aux;
+	struct thread *parent = (struct thread *) aux; // __do_fork에서 전달된 부모 스레드
 	void *parent_page;
 	void *newpage;
 	bool writable;
 
-	/* 1. TODO: If the parent_page is kernel page, then return immediately. */
+	/* 1. 가상 주소(va)가 커널 영역 주소이면 복제하지 않고 즉시 반환합니다.
+	 *    자식 프로세스는 부모의 유저 공간만 복제해야 합니다. */
+	if (is_kernel_vaddr(va)) {
+		return true;
+	}
 
 	/* 2. Resolve VA from the parent's page map level 4. */
+	/*    부모의 페이지 테이블에서 가상 주소(va)에 매핑된 물리 페이지 주소를 찾습니다. */
 	parent_page = pml4_get_page (parent->pml4, va);
+	if (parent_page == NULL) {
+		/* 부모에게 매핑되지 않은 페이지는 복제할 필요가 없습니다. */
+		return true;
+	}
 
-	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
-	 *    TODO: NEWPAGE. */
+	/* 3. 자식 프로세스를 위해 새로운 물리 페이지를 할당받습니다. */
+	newpage = palloc_get_page(PAL_USER | PAL_ZERO);
+	if (newpage == NULL) {
+		/* 메모리 할당에 실패하면 복제를 중단하고 false를 반환합니다. */
+		return false;
+	}
 
-	/* 4. TODO: Duplicate parent's page to the new page and
-	 *    TODO: check whether parent's page is writable or not (set WRITABLE
-	 *    TODO: according to the result). */
+	/* 4. 부모 페이지의 내용을 자식을 위해 할당받은 새 페이지로 복사합니다. */
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte); // 부모 페이지의 쓰기 가능 여부를 확인합니다.
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
+	/*    자식의 페이지 테이블에 가상주소(va)와 새 물리페이지(newpage)를 매핑합니다. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
-		/* 6. TODO: if fail to insert page, do error handling. */
+		/* 6. 페이지 매핑에 실패하면 할당받았던 페이지를 해제하고 false를 반환합니다. */
+		palloc_free_page(newpage);
+		return false;
 	}
 	return true;
 }
@@ -166,16 +187,21 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 static void
 __do_fork (void *aux) {
 	struct intr_frame if_;
-	struct thread *parent = (struct thread *) aux;
-	struct thread *current = thread_current ();
-	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
-	struct intr_frame *parent_if;
+	struct thread *parent = (struct thread *) aux; // process_fork에서 전달된 부모 스레드
+	struct thread *current = thread_current (); // 현재 실행 중인 자식 스레드
+	/* process_fork의 인자인 if_는 시스템 콜 핸들러의 인터럽트 프레임입니다.
+	 * 부모의 유저 컨텍스트는 부모 스레드의 tf 멤버에 저장되어 있습니다. */
+	struct intr_frame *parent_if = &parent->tf;
 	bool succ = true;
 
 	/* 1. Read the cpu context to local stack. */
+	/* 1. 부모의 CPU 문맥(레지스터 값)을 자식의 스택으로 복사합니다. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	/* 자식 프로세스에서 fork의 반환 값은 0이어야 합니다.
+	 * rax 레지스터는 함수의 반환 값을 저장하는 데 사용됩니다. */
+	if_.R.rax = 0;
 
-	/* 2. Duplicate PT */
+	/* 2. 페이지 테이블(메모리 공간)을 복제합니다. */
 	current->pml4 = pml4_create();
 	if (current->pml4 == NULL)
 		goto error;
@@ -190,18 +216,29 @@ __do_fork (void *aux) {
 		goto error;
 #endif
 
-	/* TODO: Your code goes here.
-	 * TODO: Hint) To duplicate the file object, use `file_duplicate`
-	 * TODO:       in include/filesys/file.h. Note that parent should not return
-	 * TODO:       from the fork() until this function successfully duplicates
-	 * TODO:       the resources of parent.*/
+	/* 3. 부모의 파일 디스크립터 테이블을 복제합니다. */
+	// 표준 입출력(0, 1)을 제외한 파일들을 복제합니다.
+	for (int i = 2; i < FDT_COUNT_LIMIT; i++) {
+		struct file *file = parent->fd_table[i];
+		if (file != NULL) {
+			// file_duplicate는 동일한 파일을 가리키는 새 파일 객체를 만듭니다.
+			// 파일 오프셋 등은 공유하지만, 파일 디스크립터는 독립적입니다.
+			current->fd_table[i] = file_duplicate(file);
+		}
+	}
+	current->next_fd = parent->next_fd;
 
-	process_init ();
+	/* 4. 부모-자식 관계를 설정하고, fork 완료 신호를 보냅니다. */
+	sema_up(&current->fork_sema);
 
-	/* Finally, switch to the newly created process. */
+/* 5. 모든 복제가 성공했으면, 사용자 모드로 전환하여 자식 프로세스 실행을 시작합니다. */
 	if (succ)
 		do_iret (&if_);
+
 error:
+	/* 복제 과정에서 오류 발생 시, 부모에게 실패를 알리고 스레드를 종료합니다. */
+	current->exit_status = -1; // 실패 플래그
+	sema_up(&current->fork_sema); // 실패했더라도 부모를 깨워야 합니다.
 	thread_exit ();
 }
 

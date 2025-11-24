@@ -10,6 +10,7 @@
 #include "intrinsic.h"
 #include "filesys/filesys.h"
 
+void syscall_fork (struct intr_frame *f);
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
@@ -32,6 +33,8 @@ void syscall_exit(struct intr_frame *f UNUSED);
 void syscall_create (struct intr_frame *f);
 void syscall_open (struct intr_frame *f);
 void syscall_close (struct intr_frame *f);
+void syscall_wait (struct intr_frame *f);
+void syscall_exec (struct intr_frame *f);
 
 /*'syscall_init(void)
 	*역할: 시스템 콜 메커니즘을 단 한번 초기화함
@@ -207,9 +210,8 @@ syscall_init (void) {
 		else{
 			f->R.rax = -1;
 		}
-	
-		
 	}
+	
 		
 
 	
@@ -240,13 +242,16 @@ syscall_handler (struct intr_frame *f) {
 			syscall_close(f);
 			break;
 
-		case SYS_FORK:
+		case SYS_FORK: // fork (const char *thread_name)
+			syscall_fork(f);
 			break;
 		
-		case SYS_EXEC:
+		case SYS_EXEC: // exec (const char *cmd_line)
+			syscall_exec(f);
 			break;
 		
-		case SYS_WAIT:
+		case SYS_WAIT: // wait (pid_t pid)
+			syscall_wait(f);
 			break;
 		
 		/*bool create (const char *file, unsigned initial_size)*/
@@ -255,6 +260,7 @@ syscall_handler (struct intr_frame *f) {
 			break;
 
 		case SYS_REMOVE:
+			// TODO: Not implemented
 			break;
 
 		case SYS_FILESIZE:
@@ -271,13 +277,30 @@ syscall_handler (struct intr_frame *f) {
 			break;
 
 		case SYS_SEEK:
+			// TODO: Not implemented
 			break;
 		
 		case SYS_TELL:
+			// TODO: Not implemented
 			break;
 		
 		default:
 			thread_exit();
 			break;
 	}
+}
+
+void syscall_fork (struct intr_frame *f){
+	const char *thread_name = (const char *)f->R.rdi;
+	f->R.rax = process_fork(thread_name, f);
+}
+
+void syscall_wait (struct intr_frame *f){
+	int pid = f->R.rdi;
+	f->R.rax = process_wait(pid);
+}
+
+void syscall_exec (struct intr_frame *f){
+	// TODO: Not implemented
+	// 이 함수는 fork-once에 필요하지 않을 수 있지만, 다른 테스트를 위해 구현해야 합니다.
 }
