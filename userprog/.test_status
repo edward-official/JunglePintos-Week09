@@ -39,7 +39,7 @@ open-null PASS
 sm-seq-random PASS
 bad-write2 FAIL
 sm-seq-block PASS
-multi-recurse FAIL
+multi-recurse PASS
 alarm-priority FAIL
 close-twice PASS
 args-none PASS
@@ -51,7 +51,7 @@ lg-create PASS
 exec-read PASS
 read-boundary PASS
 priority-sema FAIL
-wait-twice FAIL
+wait-twice PASS
 exec-boundary PASS
 close-normal PASS
 sm-create PASS
@@ -69,16 +69,16 @@ multi-oom FAIL
 fork-once PASS
 priority-change FAIL
 write-boundary PASS
-wait-killed FAIL
+wait-killed PASS
 lg-full PASS
 close-bad-fd PASS
 alarm-negative PASS
-multi-child-fd FAIL
+multi-child-fd PASS
 exit PASS
 write-bad-ptr PASS
 priority-donate-sema FAIL
 lg-seq-block PASS
-wait-simple FAIL
+wait-simple PASS
 exec-once PASS
 args-many PASS
 fork-read PASS
