@@ -206,8 +206,17 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+#ifdef USERPROG
+	t->parent = thread_current();
+	list_push_back(&thread_current()->children, &t->child_elem);
+	sema_init(&t->wait_sema, 0);
+	sema_init(&t->free_sema, 0);
+	sema_init(&t->fork_sema, 0);
+#endif
+
 	/* Add to run queue. */
 	thread_unblock (t);
+
 
 	return tid;
 }
@@ -466,6 +475,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+#ifdef USERPROG
+	list_init(&t->children);
+#endif
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

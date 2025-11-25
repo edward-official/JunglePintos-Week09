@@ -324,8 +324,7 @@ process_exec (void *f_name) {
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) { /*
-process_wait (tid_t child_tid) {
+process_wait (tid_t child_tid UNUSED) { 
 	/* 1. 자식 리스트에서 child_tid에 해당하는 자식 스레드를 찾습니다. */
 	struct thread *child = get_child_process(child_tid);
 
