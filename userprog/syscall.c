@@ -9,6 +9,9 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 #include "filesys/filesys.h"
+#include "userprog/process.h"
+#include "threads/palloc.h"
+
 
 void syscall_fork (struct intr_frame *f);
 void syscall_entry (void);
@@ -301,7 +304,21 @@ void syscall_wait (struct intr_frame *f){
 }
 
 void syscall_exec (struct intr_frame *f){
+	int result;
 	const char *cmd_line = (const char *)f->R.rdi;
 	check_address((void *)cmd_line, f);
-	f->R.rax = process_exec((void *)cmd_line);
+	char *fn_copy = palloc_get_page(PAL_ZERO);
+	if (fn_copy == NULL)
+		return false;
+
+	strlcpy(fn_copy, cmd_line, PGSIZE);
+
+	result = process_exec((void *)fn_copy);
+	if(result == -1){
+		f->R.rdi = -1;
+		syscall_exit(f);
+	}
+	else{
+		f->R.rax = result;
+	}
 }

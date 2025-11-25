@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#include "lib/string.h"
 //#include "include/lib/string.h"
 #include "threads/synch.h"
 #ifdef VM
@@ -67,10 +68,9 @@ process_exec을 호출하여 자기 자신을 첫 번째 사용자 프로세스�
 */
 tid_t
 process_create_initd (const char *file_name) {
-	char *fn_copy;			//file_name의 복사본을 저장할 포인터
+	char *fn_copy, *fn_copy2;			//file_name의 복사본을 저장할 포인터
 	tid_t tid;				//새로 생성될 쓰레드의 ID (프로세스 ID의 역할)
 
-	
 
 	/* FILE_NAME을 복사하는 이유
 	file_name은 이 함수를 호출한 곳(caller)의 메모리 공간에 있을 수 있음.
@@ -83,14 +83,21 @@ process_create_initd (const char *file_name) {
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	//file_name 문자열을 fn_copy 공간으로 안전하게 복사한다.
-		strlcpy (fn_copy, file_name, PGSIZE);
+	strlcpy (fn_copy, file_name, PGSIZE);
 
-	
+	/* TODO : multi-oom 때 free 고려하기, 한번 더 복사해,   */
+	fn_copy2 = palloc_get_page(0);
+	if(fn_copy2 == NULL)
+		return TID_ERROR;
+	strlcpy(fn_copy2, file_name, PGSIZE);
+	char *name_ptr = strtok_r(fn_copy2, " ", &fn_copy2);
+
+
 	/* file_name을 실행할 새 스레드를 생성한다. */
 
 	/*동작: 새로운 커널 스레드를 생성한다.
 	thread_create(쓰레드 이름, 쓰레드 기본 우선순위, 새로 생성된 쓰레드가 실행할 함수, 함수에게 전달될 인자)*/
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	tid = thread_create (name_ptr, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -491,10 +498,6 @@ load (const char *file_name, struct intr_frame *if_) {
 		argc ++;
 	}
 
-	if(argc > 0){
-		strlcpy(thread_current()->name, argv[0], sizeof(thread_current()->name));
-	}
-
 	/* 페이지 디렉토리(페이지 테이블)를 할당하고 활성화한다.
 	이것이 새 프로세스를 위한 독립적인 메모리 지도가 된다. */
 
@@ -511,7 +514,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	file = filesys_open (argv[0]);
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
-		printf("DEBUG: filesys_open() failed\n"); // [추가]
+		// printf("DEBUG: filesys_open() failed\n"); // [추가]
 		goto done;
 	}
 

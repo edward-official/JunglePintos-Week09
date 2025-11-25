@@ -15,8 +15,8 @@ create-normal PASS
 priority-donate-lower FAIL
 bad-write FAIL
 open-twice PASS
-exec-missing FAIL
-exec-arg FAIL
+exec-arg PASS
+exec-missing PASS
 read-bad-ptr PASS
 dup2-complex FAIL
 create-long PASS
@@ -25,8 +25,8 @@ fork-close PASS
 alarm-simultaneous FAIL
 fork-boundary PASS
 priority-donate-chain FAIL
-rox-multichild FAIL
 create-bound PASS
+rox-multichild FAIL
 lg-random FAIL
 priority-condvar FAIL
 priority-donate-nest FAIL
@@ -48,11 +48,11 @@ read-stdout PASS
 priority-fifo FAIL
 wait-bad-pid PASS
 lg-create PASS
-exec-read FAIL
-priority-sema FAIL
+exec-read PASS
 read-boundary PASS
+priority-sema FAIL
 wait-twice FAIL
-exec-boundary FAIL
+exec-boundary PASS
 close-normal PASS
 sm-create PASS
 halt PASS
@@ -79,7 +79,7 @@ write-bad-ptr PASS
 priority-donate-sema FAIL
 lg-seq-block PASS
 wait-simple FAIL
-exec-once FAIL
+exec-once PASS
 args-many PASS
 fork-read PASS
 write-zero PASS
