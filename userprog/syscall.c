@@ -23,12 +23,6 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
-struct file_descriptor {
-	int fd;
-	struct file *file;
-	struct list_elem elem;
-};
-
 static struct lock filesys_lock;
 
 /* System call.
@@ -64,6 +58,7 @@ static void seek_handler (int fd, unsigned position);
 static unsigned tell_handler (int fd);
 static void close_handler (int fd);
 static void close_all_files (struct thread *t);
+int dup2_handler (int oldfd, int newfd);
 
 void
 syscall_init (void) {
@@ -125,6 +120,9 @@ syscall_handler (struct intr_frame *f) {
 	case SYS_CLOSE:
 		close_handler ((int) f->R.rdi);
 		break;
+	case SYS_DUP2:
+		dup2_handler((int) f->R.rdi, (int) f->R.rsi);
+		break;
 	default:
 		exit_with_error ();
 	}
@@ -136,14 +134,22 @@ write_handler (int fd, const void *buffer, unsigned length) {
 	if (length == 0) return 0;
 	validate_user_buffer (buffer, length);
 
-	if (fd == STDOUT_FILENO) {
-		putbuf (buffer, length);
-		return (int) length;
-	}
-	if (fd == STDIN_FILENO) return -1;
+	// if (fd == STDOUT_FILENO) {
+	// 	putbuf (buffer, length);
+	// 	return (int) length;
+	// }
+	// if (fd == STDIN_FILENO) return -1;
 	
 	struct file_descriptor *desc = fd_lookup (fd);
-	if (desc == NULL) return -1;
+	if (!desc) return -1;
+	if (!desc->file) { /* STDIN, STDOUT */
+		if (desc->fd_kind == FD_STDIN) return -1;
+		if (desc->fd_kind == FD_STDOUT) {
+			if (thread_current()->stdout_cnt == 0) return -1;
+			putbuf (buffer, length);
+			return (int) length;
+		}
+	}
 	lock_acquire (&filesys_lock);
 	int result = file_write (desc->file, buffer, length);
 	lock_release (&filesys_lock);
@@ -156,18 +162,26 @@ read_handler (int fd, void *buffer, unsigned length) {
 	if (length == 0) return 0;
 	validate_user_buffer (buffer, length);
 
-	if (fd == STDIN_FILENO) {
-		uint8_t *dst = buffer;
-		for (unsigned i = 0; i < length; i++)
-			dst[i] = input_getc ();
-		return (int) length;
-	}
-	if (fd == STDOUT_FILENO)
-		return -1;
+	// if (fd == STDIN_FILENO) {
+	// 	uint8_t *dst = buffer;
+	// 	for (unsigned i = 0; i < length; i++)
+	// 		dst[i] = input_getc ();
+	// 	return (int) length;
+	// }
+	// if (fd == STDOUT_FILENO)
+	// 	return -1;
 
 	struct file_descriptor *desc = fd_lookup (fd);
-	if (desc == NULL)
-		return -1;
+	if (desc == NULL) return -1;
+	if (desc->file == NULL) {
+		if (desc->fd_kind == FD_STDOUT) return -1;
+		if (desc->fd_kind == FD_STDIN) {
+			if (thread_current()->stdin_cnt == 0) return -1;
+			uint8_t *dst = buffer;
+			for (unsigned i = 0; i < length; i++) dst[i] = input_getc ();
+			return (int) length;
+		}
+	}
 
 	lock_acquire (&filesys_lock);
 	int result = file_read (desc->file, buffer, length);
@@ -315,12 +329,17 @@ static void
 close_handler (int fd) {
 	struct file_descriptor *desc = fd_lookup (fd);
 	if (desc == NULL) return;
+	if (!desc->file) {
+		if (desc->fd_kind == FD_STDIN)
+			thread_current()->stdin_cnt--;
+		else if (desc->fd_kind == FD_STDOUT)
+			thread_current()->stdout_cnt--;
+	}
 	close_fd (desc);
 }
 
 static struct file_descriptor *
 fd_lookup (int fd) {
-	if (fd < 2) return NULL;
 	struct thread *curr = thread_current ();
 	if (!curr->fds_initialized) return NULL;
 	for (struct list_elem *e = list_begin (&curr->file_descriptors); e != list_end (&curr->file_descriptors); e = list_next (e)) {
@@ -339,6 +358,7 @@ allocate_fd (struct file *file) {
 	if (desc == NULL) return -1;
 	desc->fd = curr->next_fd++;
 	desc->file = file;
+	desc->fd_kind = FD_FILE;
 	list_push_back (&curr->file_descriptors, &desc->elem);
 	return desc->fd;
 }
@@ -346,9 +366,11 @@ allocate_fd (struct file *file) {
 static void
 close_fd (struct file_descriptor *desc) {
 	list_remove (&desc->elem);
-	lock_acquire (&filesys_lock);
-	file_close (desc->file);
-	lock_release (&filesys_lock);
+	if (desc->fd_kind == FD_FILE && desc->file != NULL && --desc->file->ref_cnt == 0) {
+		lock_acquire (&filesys_lock);
+		file_close (desc->file);
+		lock_release (&filesys_lock);
+	}
 	free (desc);
 }
 
@@ -359,7 +381,7 @@ close_all_files (struct thread *t) {
 		struct file_descriptor *desc = list_entry (list_begin (&t->file_descriptors), struct file_descriptor, elem);
 		close_fd (desc);
 	}
-	t->next_fd = 2;
+	t->next_fd = 0;
 }
 
 void
@@ -376,7 +398,37 @@ syscall_duplicate_fds (struct thread *parent, struct thread *child) {
 		return true;
 	if (!child->fds_initialized) {
 		list_init (&child->file_descriptors);
-		child->next_fd = 2;
+		// child->next_fd = 2;
+		/*
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		🔥🔥🔥🔥
+		*/
 		child->fds_initialized = true;
 	}
 
@@ -401,4 +453,24 @@ syscall_duplicate_fds (struct thread *parent, struct thread *child) {
 	}
 	child->next_fd = parent->next_fd;
 	return true;
+}
+
+int
+dup2_handler (int oldfd, int newfd) {
+	struct file_descriptor *desc_old = fd_lookup(oldfd);
+	if(!desc_old) return -1;
+	if(oldfd == newfd) return newfd;
+	
+	struct file_descriptor *desc_new = fd_lookup(newfd);
+	if(desc_new) close_fd(desc_new);
+	desc_new = malloc(sizeof(*desc_new));
+	if(!desc_new) return -1;
+	desc_new->fd = newfd;
+	desc_new->fd_kind = desc_old->fd_kind;
+	desc_new->file = desc_old->file;
+	if (desc_new->fd_kind == FD_FILE && desc_new->file != NULL) desc_old->file->ref_cnt++;
+	else if(desc_new->fd_kind == FD_STDIN) thread_current()->stdin_cnt++;
+	else if(desc_new->fd_kind == FD_STDOUT) thread_current()->stdout_cnt++;
+	list_push_back (&thread_current ()->file_descriptors, &desc_new->elem);
+	return newfd;
 }

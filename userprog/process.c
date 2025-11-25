@@ -49,11 +49,26 @@ edward: initialize struct of current thread
 static void
 process_init (void) {
 	struct thread *current = thread_current ();
-#ifdef USERPROG
+	current->stdin_cnt = 1;
+	current->stdout_cnt = 1;
+
+	#ifdef USERPROG
 	if (!current->fds_initialized) {
 		list_init(&current->file_descriptors);
 		current->next_fd = 2;
 		current->fds_initialized = true;
+
+		struct file_descriptor *fd_stdin = malloc(sizeof(*fd_stdin));
+		fd_stdin->fd = 0;
+		fd_stdin->file = NULL;
+		fd_stdin->fd_kind = FD_STDIN;
+		list_push_back(&current->file_descriptors, &fd_stdin->elem);
+		
+		struct file_descriptor *fd_stdout = malloc(sizeof(*fd_stdout));
+		fd_stdout->fd = 1;
+		fd_stdout->file = NULL;
+		fd_stdout->fd_kind = FD_STDOUT;
+		list_push_back(&current->file_descriptors, &fd_stdout->elem);
 	}
 	if (!current->children_initialized) {
 		list_init(&current->children);
@@ -528,7 +543,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	if (file_name_copy == NULL) goto done;
 	strlcpy (file_name_copy, file_name, PGSIZE);
 
-	/* edward: parse the token TODO */
+	/* edward: parse the token */
 	for (token = strtok_r (file_name_copy, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)) {
 		if (argc >= MAX_ARGS) goto done;
 		argv[argc++] = token;
