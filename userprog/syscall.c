@@ -172,25 +172,30 @@ void syscall_open(struct intr_frame *f){
 	check_string_address(f, name);
 	lock_acquire(&filesys_lock);
 	struct file *open_file = filesys_open(name);
-	lock_release(&filesys_lock);
 	f->R.rax = -1;
 	if(open_file == NULL){
+		lock_release(&filesys_lock);
 		return;
 	}
-	else{
-		for(int i=2; i<64; i++){
-			if(thread_current()->fdt[i] == NULL){
-				thread_current()->fdt[i] = open_file;
-				f->R.rax = i;
-				break;
-			}
+
+	/* Find empty slot in file descriptor table. */
+	for(int i=2; i<128; i++){
+		if(thread_current()->fdt[i] == NULL){
+			thread_current()->fdt[i] = open_file;
+			f->R.rax = i;
+			lock_release(&filesys_lock);
+			return;
 		}
 	}
+
+	/* No free slot: close the just-opened file to avoid leaks. */
+	file_close(open_file);
+	lock_release(&filesys_lock);
 }
 
 void syscall_filesize(struct intr_frame *f){
 	int fd = f->R.rdi;
-	if(fd>=2 && fd<64){
+	if(fd>=2 && fd<128){
 		lock_acquire(&filesys_lock);
 		f->R.rax = file_length(thread_current()->fdt[fd]);
 		lock_release(&filesys_lock);
@@ -211,7 +216,7 @@ void syscall_read(struct intr_frame *f){
 		}
 		f->R.rax = size;
 	}
-	else if(fd >= 2 && fd < 64 && curr->fdt[fd] != NULL){
+	else if(fd >= 2 && fd < 128 && curr->fdt[fd] != NULL){
 		struct file *file = curr->fdt[fd];
 
 		lock_acquire(&filesys_lock);
@@ -242,7 +247,7 @@ void syscall_write(struct intr_frame *f){
 		putbuf(buf, size);
 		f->R.rax = size;
 	}
-	else if(fd >= 2 && fd < 64 && curr->fdt[fd] != NULL){
+	else if(fd >= 2 && fd < 128 && curr->fdt[fd] != NULL){
 		f->R.rax = file_write(curr->fdt[fd], buf, size);
 	}
 	else{
@@ -258,7 +263,7 @@ void syscall_seek(struct intr_frame *f){
 	struct thread *curr = thread_current();
 
 	if(curr->fdt != NULL){
-		if(fd>=2 && fd<64){
+		if(fd>=2 && fd<128){
 			lock_acquire(&filesys_lock);
 			file_seek(curr->fdt[fd], position);
 			lock_release(&filesys_lock);
@@ -272,7 +277,7 @@ void syscall_tell(struct intr_frame *f){
 	struct thread *curr = thread_current();
 
 	if(curr->fdt != NULL){
-		if(fd>=2 && fd<64){
+		if(fd>=2 && fd<128){
 			lock_acquire(&filesys_lock);
 			f->R.rax = file_tell(curr->fdt[fd]);
 			lock_release(&filesys_lock);
@@ -285,7 +290,7 @@ void syscall_close(struct intr_frame *f){
 	int fd = f->R.rdi;
 	struct thread *curr = thread_current();
 
-	if(2<=fd && fd<64){
+	if(2<=fd && fd<128){
 
 		struct file *close_file = curr->fdt[fd];
 

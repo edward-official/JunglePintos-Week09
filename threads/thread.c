@@ -214,8 +214,7 @@ thread_print_stats (void) {
    Priority scheduling is the goal of Problem 1-3. */
 
 tid_t
-thread_create (const char *name, int priority,
-		thread_func *function, void *aux) {
+thread_create (const char *name, int priority, thread_func *function, void *aux) {
 	struct thread *t;
 	tid_t tid;
 
@@ -249,6 +248,7 @@ thread_create (const char *name, int priority,
 	//NOTE : syscall_open 추가
 	t->fdt = palloc_get_multiple(PAL_ZERO, 1);
 	if(t->fdt == NULL){
+		palloc_free_page(t);
 		return TID_ERROR;
 	}
 
@@ -257,6 +257,13 @@ thread_create (const char *name, int priority,
 
 	//NOTE: 부모 쓰레드에 child_info의 elem를 넣어주기 위한 푸쉬
 	struct child_info *info = malloc(sizeof(struct child_info));
+	if(info == NULL){
+		palloc_free_page(t->fdt);
+		list_remove(&t->elem_whole);
+		palloc_free_page(t);
+		return TID_ERROR;
+	}
+
 	t->info = info;
 	info->tid = tid;
 	list_push_back(&thread_current()->child_list, &info->elem_for_parent);

@@ -56,15 +56,18 @@ process_create_initd (const char *file_name) {
 	char *name_ptr = palloc_get_page(0);
 	if(name_ptr == NULL){
 		palloc_free_page(fn_copy);
-		return TID_ERROR; 
+		return TID_ERROR;
 	}
 	strlcpy(name_ptr, file_name, PGSIZE);
 	char *thread_name = strtok_r(name_ptr, " ", &save_ptr);
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (thread_name, PRI_DEFAULT, initd, fn_copy);
-	if (tid == TID_ERROR)
-		palloc_free_page (fn_copy);
+	if (tid == TID_ERROR){
+		palloc_free_page(fn_copy);
+	}
+	palloc_free_page(name_ptr);
+
 	return tid;
 }
 
@@ -86,6 +89,7 @@ struct fork_aux{
 	struct thread *parent;
 	struct intr_frame *if_;
 	struct semaphore *fork_sema;
+	bool fork_success;
 };
 
 /* Clones the current process as `name`. Returns the new process's thread id, or
@@ -94,19 +98,33 @@ tid_t
 process_fork (const char *name, struct intr_frame *if_) {
 	struct fork_aux aux;
 	struct semaphore fork_sema;
+	struct thread *curr = thread_current();
 
 	sema_init(&fork_sema, 0);
 
 	aux.parent = thread_current();
 	aux.if_ = if_;
 	aux.fork_sema = &fork_sema;
+	aux.fork_success = false;
 
 	tid_t tid = thread_create (name, PRI_DEFAULT, __do_fork, &aux); 
 	if(tid == TID_ERROR){
+		for(struct list_elem *i = list_begin(&curr->child_list); i != list_end(&curr->child_list); i = list_next(i)){
+			struct child_info *temp_info = list_entry(i, struct child_info, elem_for_parent);
+			if(temp_info->tid == tid){
+				list_remove(&temp_info->elem_for_parent);
+				free(temp_info);
+			}
+		}
 		return TID_ERROR;
 	}
 
 	sema_down(&fork_sema);
+
+	if(aux.fork_success == false) {
+		process_wait(tid);
+		return TID_ERROR;
+	}
 
 	return tid;
 }
@@ -131,6 +149,9 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 
 	/* 2. 부모의 PML4(페이지 맵 레벨 4)에서 VA(가상 주소)를 해석하여 실제 주소를 찾습니다. */
 	parent_page = pml4_get_page (parent->pml4, va);
+	if(parent_page == NULL){
+		return false;
+	}
 
 	/* 
 		3. TODO: 자식을 위해 새로운 PAL_USER 페이지를 할당하고,
@@ -173,6 +194,7 @@ __do_fork (void *aux) {
 
 	struct fork_aux *args = aux;
 
+	struct semaphore *fork_sema = args->fork_sema;
 	struct intr_frame if_;
 	struct thread *parent = args->parent;
 	struct thread *current = thread_current ();
@@ -207,18 +229,27 @@ __do_fork (void *aux) {
 	*/
 
 	lock_acquire(&filesys_lock);
-	for(int i=2; i<64; i++){
+	for(int i=2; i<128; i++){
 		if(parent->fdt[i] != NULL){
 			current->fdt[i] = file_duplicate(parent->fdt[i]);
+			if(current->fdt[i] == NULL){
+				lock_release(&filesys_lock);
+				goto error;
+			}
 		}
 	}
 
 	current->running_file = file_duplicate(parent->running_file);
+	if(current->running_file == NULL){
+		lock_release(&filesys_lock);
+		goto error;
+	}
 	lock_release(&filesys_lock);
 
 	process_init ();
 
-	struct semaphore *fork_sema = args->fork_sema;
+	args->fork_success = true;
+
 	if(fork_sema != NULL) sema_up(fork_sema);
 
 	/* 마지막으로, 새롭게 만든 프로세스로 스위칭 */
@@ -226,6 +257,7 @@ __do_fork (void *aux) {
 		do_iret (&if_);
 error:
 	if(fork_sema != NULL) sema_up(fork_sema);
+	current->exit_status = -1;
 	thread_exit ();
 }
 
@@ -235,8 +267,12 @@ error:
 int process_exec (void *f_name) {
 	//인자로 받은 파일 이름의 주소(예 : "ls -l foo")
 	char *file_name = palloc_get_page(PAL_ZERO);
-	if(file_name == NULL) return -1;
+	if(file_name == NULL){
+		palloc_free_page(f_name);
+		return -1;
+	}
 	strlcpy(file_name, f_name, PGSIZE);
+	if(is_kernel_vaddr(f_name)) palloc_free_page(f_name);
 
 	bool success;
 
@@ -263,8 +299,10 @@ int process_exec (void *f_name) {
 	//파일 이름 문자열은 이제 필요 없으니 메모리 해제
 	palloc_free_page (file_name);
 	//load가 실패하면 -1 리턴(프로세스 종료)
-	if (!success)
-		return -1;
+	if (!success){
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
 
 	//열심히 설정한 _if구조체의 내용을 실제 CPU 레지스터에 쏜다.
 	//이 명령어가 실행되는 순간, _if.rip이 가르키는 함수로 점프
@@ -303,9 +341,7 @@ process_wait (tid_t child_tid) {
 				temp_exit_status = temp_info->exit_status;
 				free(temp_info);
 
-				return temp_exit_status;
-
-				break;			
+				return temp_exit_status;		
 			}
 
 		}
@@ -322,7 +358,7 @@ process_exit (void) {
 
 	lock_acquire(&filesys_lock);
 	if(curr->fdt != NULL){
-		for(int i=2; i<64; i++){
+		for(int i=2; i<128; i++){
 			if(curr->fdt[i] != NULL){
 				file_close(curr->fdt[i]);
 				curr->fdt[i] = NULL;
@@ -332,7 +368,7 @@ process_exit (void) {
 		palloc_free_page(thread_current()->fdt);
 	}
 	
-	file_close(curr->running_file);
+	if(curr->running_file != NULL) file_close(curr->running_file);
 
 	lock_release(&filesys_lock);
 
@@ -340,9 +376,16 @@ process_exit (void) {
         printf("%s: exit(%d)\n", curr->name, curr->exit_status);
     }
 
-	curr->info->exit_status = curr->exit_status;
+	if (curr->info != NULL) {
+		curr->info->exit_status = curr->exit_status;
+		sema_up(&curr->info->child_sema);
+	}
 
-	sema_up(&curr->info->child_sema);
+	while (!list_empty(&curr->child_list)) {
+		struct list_elem *e = list_pop_front(&curr->child_list);
+		struct child_info *info = list_entry(e, struct child_info, elem_for_parent);
+		free(info); 
+	}
 
 	process_cleanup ();
 }
@@ -461,6 +504,7 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 	
 	//file_name을 자르기 위한 변수
 	char *fn_copy = palloc_get_page(0);
+	if(fn_copy == NULL) return false;
 	char *token;
 	char *save_ptr;
 	char *argv[64];
@@ -481,7 +525,9 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 
 	//페이지 테이블 생성
 	t->pml4 = pml4_create ();
-	if (t->pml4 == NULL) goto done;
+	if (t->pml4 == NULL){
+		goto done;
+	}
 	//CR3 레지스터 교체 -> CPU는 이 페이지 테이블을 써라.
 	process_activate (thread_current ());
 
@@ -621,14 +667,17 @@ static bool load (const char *file_name, struct intr_frame *if_) {
 	success = true;
 
 done:
-	/* We arrive here whether the load is successful or not. */
+
+	palloc_free_page(fn_copy);
+
 	if(success != true){
-		file_close (file);
+		if(file != NULL){
+			lock_acquire(&filesys_lock);
+			file_close (file);
+			lock_release(&filesys_lock);
+		}
 		thread_current()->running_file = NULL;
 	}
-	//NOTE : 추가
-	//fn_copy를 다 썼으므로 free시켜줌.
-	palloc_free_page(fn_copy);
 
 	return success;
 }
