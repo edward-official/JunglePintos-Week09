@@ -228,14 +228,32 @@ __do_fork (void *aux) {
 	(중요) 부모는 자식 프로세스가 부모의 자원을 성공적으로 복제할 때까지 fork()에서 반환해서는 안됩니다.
 	*/
 
+	struct file **parent_fdt = parent->fdt;
+	struct file **current_fdt = current->fdt;
+
 	lock_acquire(&filesys_lock);
-	for(int i=2; i<128; i++){
+	for(int i=0; i<FDT_COUNT_LIMIT; i++){
 		if(parent->fdt[i] != NULL){
-			current->fdt[i] = file_duplicate(parent->fdt[i]);
-			if(current->fdt[i] == NULL){
-				lock_release(&filesys_lock);
-				goto error;
+
+			if(parent_fdt[i] == STDIN_MARK || parent_fdt[i] == STDOUT_MARK){
+				current_fdt[i] = parent_fdt[i];
 			}
+			else{
+				struct file *new_file = NULL;
+				for(int j=0; j<i; j++){
+					if(parent_fdt[j] == parent_fdt[i]){
+						new_file = current_fdt[j];
+						break;
+					}
+				}
+				if(new_file != NULL){
+					current_fdt[i] = file_dup(new_file);
+				}
+				else{
+					current_fdt[i] = file_duplicate(parent_fdt[i]);
+				}
+			}
+
 		}
 	}
 
@@ -358,9 +376,11 @@ process_exit (void) {
 
 	lock_acquire(&filesys_lock);
 	if(curr->fdt != NULL){
-		for(int i=2; i<128; i++){
+		for(int i=0; i<FDT_COUNT_LIMIT; i++){
 			if(curr->fdt[i] != NULL){
-				file_close(curr->fdt[i]);
+				if(curr->fdt[i] != STDIN_MARK && curr->fdt[i] != STDOUT_MARK){
+					file_close(curr->fdt[i]);
+				}
 				curr->fdt[i] = NULL;
 			}
 		}
@@ -368,8 +388,9 @@ process_exit (void) {
 		palloc_free_page(thread_current()->fdt);
 	}
 	
-	if(curr->running_file != NULL) file_close(curr->running_file);
-
+	if(curr->running_file != NULL){
+		file_close(curr->running_file);
+	}
 	lock_release(&filesys_lock);
 
 	if (curr->pml4 != NULL) {

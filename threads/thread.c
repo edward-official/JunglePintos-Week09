@@ -14,6 +14,7 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "intrinsic.h"
+#include "userprog/syscall.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -252,8 +253,8 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
 		return TID_ERROR;
 	}
 
-	t->fdt[0] = (void *)1;
-	t->fdt[1] = (void *)2;
+	t->fdt[0] = STDIN_MARK;
+	t->fdt[1] = STDOUT_MARK;
 
 	//NOTE: 부모 쓰레드에 child_info의 elem를 넣어주기 위한 푸쉬
 	struct child_info *info = malloc(sizeof(struct child_info));

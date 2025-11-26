@@ -13,7 +13,7 @@ Pintos booting with:
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
 Calibrating timer...  235,520,000 loops/s.
 hd0: unexpected interrupt
-hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:0: detected 345 sector (172 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
 hd1: unexpected interrupt
 hd1:0: detected 121 sector (60 kB) disk, model "QEMU HARDDISK", serial "QM00003"
@@ -27,7 +27,7 @@ Executing 'read-bad-ptr':
 read-bad-ptr: exit(-1)
 Execution of 'read-bad-ptr' complete.
 Timer: 78 ticks
-Thread: 39 idle ticks, 37 kernel ticks, 2 user ticks
+Thread: 37 idle ticks, 37 kernel ticks, 4 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 116 reads, 280 writes
 hd1:0: 121 reads, 0 writes

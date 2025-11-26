@@ -3,6 +3,9 @@
 
 #include "threads/synch.h"
 
+#define STDIN_MARK  ((void *)0x1)
+#define STDOUT_MARK ((void *)0x2)
+
 void syscall_init (void);
 
 /*

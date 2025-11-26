@@ -29,6 +29,7 @@ void syscall_write(struct intr_frame *f);
 void syscall_seek(struct intr_frame *f);
 void syscall_tell(struct intr_frame *f);
 void syscall_close(struct intr_frame *f);
+void syscall_dup2(struct intr_frame *f);
 void check_buf_address(struct intr_frame *f, char *buf, unsigned size);
 void check_string_address(struct intr_frame *f, char *str_addr);
 
@@ -111,6 +112,9 @@ syscall_handler (struct intr_frame *f) {
 		case SYS_CLOSE:
 			syscall_close(f);
 			break;
+		case SYS_DUP2:
+			syscall_dup2(f);
+			break;
 	}
 }
 
@@ -179,7 +183,7 @@ void syscall_open(struct intr_frame *f){
 	}
 
 	/* Find empty slot in file descriptor table. */
-	for(int i=2; i<128; i++){
+	for(int i=2; i<FDT_COUNT_LIMIT; i++){
 		if(thread_current()->fdt[i] == NULL){
 			thread_current()->fdt[i] = open_file;
 			f->R.rax = i;
@@ -195,7 +199,15 @@ void syscall_open(struct intr_frame *f){
 
 void syscall_filesize(struct intr_frame *f){
 	int fd = f->R.rdi;
-	if(fd>=2 && fd<128){
+	struct thread *curr = thread_current();
+
+	if(fd<0 || fd>=FDT_COUNT_LIMIT || curr->fdt[fd] == NULL){
+		f->R.rax = -1;
+	}
+	else if(curr->fdt[fd] == STDIN_MARK || curr->fdt[fd] == STDOUT_MARK){
+		f->R.rax = -1;
+	}
+	else{
 		lock_acquire(&filesys_lock);
 		f->R.rax = file_length(thread_current()->fdt[fd]);
 		lock_release(&filesys_lock);
@@ -210,13 +222,23 @@ void syscall_read(struct intr_frame *f){
 
 	check_buf_address(f, buffer, size);
 
-	if(fd == 0){
+	if(fd < 0 || fd >= FDT_COUNT_LIMIT || curr->fdt[fd] == NULL){
+		f->R.rax = -1;
+		return;
+	}
+
+	struct file *file_obj = curr->fdt[fd];
+
+	if(file_obj == STDIN_MARK){
 		for(unsigned i=0; i<size; i++){
 			((char *)buffer)[i] = input_getc();
 		}
 		f->R.rax = size;
 	}
-	else if(fd >= 2 && fd < 128 && curr->fdt[fd] != NULL){
+	else if(file_obj == STDOUT_MARK){
+		f->R.rax = -1;
+	}
+	else{
 		struct file *file = curr->fdt[fd];
 
 		lock_acquire(&filesys_lock);
@@ -224,9 +246,6 @@ void syscall_read(struct intr_frame *f){
 		lock_release(&filesys_lock);
 
 		f->R.rax = byte;
-	}
-	else{
-		f->R.rax = -1;
 	}
 
 }
@@ -238,22 +257,26 @@ void syscall_write(struct intr_frame *f){
 	struct thread *curr = thread_current();
 
 	check_buf_address(f, buf, size);
+
+	if(fd < 0 || fd >= FDT_COUNT_LIMIT || curr->fdt[fd] == NULL){
+		f->R.rax = -1;
+		return;
+	}
+
+	struct file *file_obj = curr->fdt[fd];
 	
-	lock_acquire(&filesys_lock);
-	if(fd == 0){
+	if(file_obj == STDIN_MARK){
 		f->R.rax = -1;
 	}
-	else if(fd == 1) {
+	else if(file_obj == STDOUT_MARK) {
 		putbuf(buf, size);
 		f->R.rax = size;
 	}
-	else if(fd >= 2 && fd < 128 && curr->fdt[fd] != NULL){
-		f->R.rax = file_write(curr->fdt[fd], buf, size);
-	}
 	else{
-		f->R.rax = -1;
+		lock_acquire(&filesys_lock);
+		f->R.rax = file_write(curr->fdt[fd], buf, size);
+		lock_release(&filesys_lock);
 	}
-	lock_release(&filesys_lock);
 }
 
 void syscall_seek(struct intr_frame *f){
@@ -262,13 +285,19 @@ void syscall_seek(struct intr_frame *f){
 	unsigned position = f->R.rsi;
 	struct thread *curr = thread_current();
 
-	if(curr->fdt != NULL){
-		if(fd>=2 && fd<128){
-			lock_acquire(&filesys_lock);
-			file_seek(curr->fdt[fd], position);
-			lock_release(&filesys_lock);
-		}
+
+	if(fd<0 || fd>=FDT_COUNT_LIMIT || curr->fdt[fd] == NULL){
+		f->R.rax = -1;
 	}
+	else if(curr->fdt[fd] == STDIN_MARK || curr->fdt[fd] == STDOUT_MARK){
+		f->R.rax = -1;
+	}
+	else{
+		lock_acquire(&filesys_lock);
+		file_seek(curr->fdt[fd], position);
+		lock_release(&filesys_lock);
+	}
+
 }
 
 void syscall_tell(struct intr_frame *f){
@@ -277,7 +306,13 @@ void syscall_tell(struct intr_frame *f){
 	struct thread *curr = thread_current();
 
 	if(curr->fdt != NULL){
-		if(fd>=2 && fd<128){
+		if(fd<0 || fd>=FDT_COUNT_LIMIT || curr->fdt[fd] == NULL){
+			f->R.rax = -1;
+		}
+		else if(curr->fdt[fd] == STDIN_MARK || curr->fdt[fd] == STDOUT_MARK){
+			f->R.rax = -1;
+		}
+		else{
 			lock_acquire(&filesys_lock);
 			f->R.rax = file_tell(curr->fdt[fd]);
 			lock_release(&filesys_lock);
@@ -286,34 +321,71 @@ void syscall_tell(struct intr_frame *f){
 }
 
 void syscall_close(struct intr_frame *f){
-
 	int fd = f->R.rdi;
 	struct thread *curr = thread_current();
 
-	if(2<=fd && fd<128){
+	if(fd<0 || fd>=FDT_COUNT_LIMIT || curr->fdt[fd] == NULL){
+		f->R.rax = -1;
+		return;
+	}
 
-		struct file *close_file = curr->fdt[fd];
+	struct file *close_file = curr->fdt[fd];
 
-		if(close_file != NULL){
-			lock_acquire(&filesys_lock);
-			file_close(close_file);
-			lock_release(&filesys_lock);
-			curr->fdt[fd] = NULL;
-			f->R.rax = 0;
-		}
-		else{
-			f->R.rax = -1;
-		}
-
+	if(curr->fdt[fd] == STDIN_MARK || curr->fdt[fd] == STDOUT_MARK){
+		curr->fdt[fd] = NULL;
 	}
 	else{
-		f->R.rax = -1;
+		lock_acquire(&filesys_lock);
+		file_close(close_file);
+		lock_release(&filesys_lock);
+		curr->fdt[fd] = NULL;
 	}
+	f->R.rax = 0;
+}
 
+void syscall_dup2(struct intr_frame *f) {
+    int oldfd = f->R.rdi;
+    int newfd = f->R.rsi;
+    struct thread *curr = thread_current();
+
+    if (oldfd < 0 || oldfd >= FDT_COUNT_LIMIT || newfd < 0 || newfd >= FDT_COUNT_LIMIT) {
+        f->R.rax = -1;
+        return;
+    }
+
+    struct file *old_file_obj = curr->fdt[oldfd];
+
+    if (old_file_obj == NULL) {
+        f->R.rax = -1;
+        return;
+    }
+
+    if (oldfd == newfd) {
+        f->R.rax = newfd;
+        return;
+    }
+
+    struct file *new_file_obj = curr->fdt[newfd];
+    if (new_file_obj != NULL) {
+        if (new_file_obj != STDIN_MARK && new_file_obj != STDOUT_MARK) {
+            lock_acquire(&filesys_lock);
+            file_close(new_file_obj);
+            lock_release(&filesys_lock);
+        }
+    }
+
+	lock_acquire(&filesys_lock);
+    if (old_file_obj != STDIN_MARK && old_file_obj != STDOUT_MARK) {
+        curr->fdt[newfd] = file_dup(old_file_obj);
+    } else {
+        curr->fdt[newfd] = old_file_obj;
+    }
+	lock_release(&filesys_lock);
+
+    f->R.rax = newfd;
 }
 
 void check_buf_address(struct intr_frame *f, char *buf, unsigned size){
-
 	char *end = buf + size;
 
 	if(buf == NULL){
@@ -326,7 +398,6 @@ void check_buf_address(struct intr_frame *f, char *buf, unsigned size){
 			f->R.rdi = -1;
 			syscall_exit(f);
 		}
-
 		buf = (char *)pg_round_down(buf) + 4096;
 	}
 }
@@ -348,5 +419,4 @@ void check_string_address(struct intr_frame *f, char *str_addr){
 		}
 		str_addr += 1;
 	}
-
 }

@@ -13,7 +13,7 @@ Pintos booting with:
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
 Calibrating timer...  261,734,400 loops/s.
 hd0: unexpected interrupt
-hd0:0: detected 337 sector (168 kB) disk, model "QEMU HARDDISK", serial "QM00001"
+hd0:0: detected 345 sector (172 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
 hd1: unexpected interrupt
 hd1:0: detected 261 sector (130 kB) disk, model "QEMU HARDDISK", serial "QM00003"
@@ -29,21 +29,21 @@ Executing 'syn-read':
 (syn-read) close "data"
 (syn-read) exec child 1 of 10: "child-syn-read 0"
 (syn-read) exec child 2 of 10: "child-syn-read 1"
+(syn-read) exec child 3 of 10: "child-syn-read 2"
 child-syn-read: exit(0)
 child-syn-read: exit(1)
-(syn-read) exec child 3 of 10: "child-syn-read 2"
 child-syn-read: exit(2)
 (syn-read) exec child 4 of 10: "child-syn-read 3"
 (syn-read) exec child 5 of 10: "child-syn-read 4"
+(syn-read) exec child 6 of 10: "child-syn-read 5"
 child-syn-read: exit(3)
 child-syn-read: exit(4)
-(syn-read) exec child 6 of 10: "child-syn-read 5"
 child-syn-read: exit(5)
 (syn-read) exec child 7 of 10: "child-syn-read 6"
 (syn-read) exec child 8 of 10: "child-syn-read 7"
+(syn-read) exec child 9 of 10: "child-syn-read 8"
 child-syn-read: exit(6)
 child-syn-read: exit(7)
-(syn-read) exec child 9 of 10: "child-syn-read 8"
 child-syn-read: exit(8)
 (syn-read) exec child 10 of 10: "child-syn-read 9"
 (syn-read) wait for child 1 of 10 returned 0 (expected 0)
@@ -60,8 +60,8 @@ child-syn-read: exit(9)
 (syn-read) end
 syn-read: exit(0)
 Execution of 'syn-read' complete.
-Timer: 467 ticks
-Thread: 230 idle ticks, 41 kernel ticks, 197 user ticks
+Timer: 454 ticks
+Thread: 237 idle ticks, 41 kernel ticks, 176 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 10996 reads, 576 writes
 hd1:0: 261 reads, 0 writes

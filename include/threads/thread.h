@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #include "threads/synch.h"
+#include "threads/vaddr.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -29,6 +30,8 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+#define FDT_COUNT_LIMIT (PGSIZE / sizeof(struct file *))
 
 /* A kernel thread or user process.
  *
