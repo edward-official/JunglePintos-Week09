@@ -59,6 +59,7 @@ static unsigned tell_handler (int fd);
 static void close_handler (int fd);
 static void close_all_files (struct thread *t);
 int dup2_handler (int oldfd, int newfd);
+void update_fduplicated(struct thread *thread, bool b_value);
 
 void
 syscall_init (void) {
@@ -121,7 +122,7 @@ syscall_handler (struct intr_frame *f) {
 		close_handler ((int) f->R.rdi);
 		break;
 	case SYS_DUP2:
-		dup2_handler((int) f->R.rdi, (int) f->R.rsi);
+		f->R.rax = dup2_handler((int) f->R.rdi, (int) f->R.rsi);
 		break;
 	default:
 		exit_with_error ();
@@ -308,7 +309,7 @@ filesize_handler (int fd) {
 static void
 seek_handler (int fd, unsigned position) {
 	struct file_descriptor *desc = fd_lookup (fd);
-	if (desc == NULL) return;
+	if (!desc || !desc->file) return;
 	lock_acquire (&filesys_lock);
 	file_seek (desc->file, position);
 	lock_release (&filesys_lock);
@@ -329,12 +330,6 @@ static void
 close_handler (int fd) {
 	struct file_descriptor *desc = fd_lookup (fd);
 	if (desc == NULL) return;
-	if (!desc->file) {
-		if (desc->fd_kind == FD_STDIN)
-			thread_current()->stdin_cnt--;
-		else if (desc->fd_kind == FD_STDOUT)
-			thread_current()->stdout_cnt--;
-	}
 	close_fd (desc);
 }
 
@@ -371,6 +366,8 @@ close_fd (struct file_descriptor *desc) {
 		file_close (desc->file);
 		lock_release (&filesys_lock);
 	}
+	else if(desc->fd_kind == FD_STDIN && !desc->file) thread_current()->stdin_cnt--;
+	else if(desc->fd_kind == FD_STDOUT && !desc->file) thread_current()->stdout_cnt--;
 	free (desc);
 }
 
@@ -389,6 +386,14 @@ syscall_process_cleanup (void) {
 	close_all_files (thread_current ());
 }
 
+void
+update_fduplicated(struct thread *thread, bool b_value) {
+	for (struct list_elem *e = list_begin (&thread->file_descriptors); e != list_end (&thread->file_descriptors); e = list_next (e)) {
+		struct file_descriptor *desc = list_entry (e, struct file_descriptor, elem);
+		if(desc->file) desc->file->is_duplicated = b_value;
+	}
+}
+
 bool
 syscall_duplicate_fds (struct thread *parent, struct thread *child) {
 	ASSERT (parent != NULL);
@@ -399,57 +404,53 @@ syscall_duplicate_fds (struct thread *parent, struct thread *child) {
 	if (!child->fds_initialized) {
 		list_init (&child->file_descriptors);
 		// child->next_fd = 2;
-		/*
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		🔥🔥🔥🔥
-		*/
 		child->fds_initialized = true;
 	}
+	else close_all_files(child);
 
+	update_fduplicated(parent, false);
 	for (struct list_elem *e = list_begin (&parent->file_descriptors); e != list_end (&parent->file_descriptors); e = list_next (e)) {
+		/* edward: allocate child file descriptor */
 		struct file_descriptor *parent_fd = list_entry (e, struct file_descriptor, elem);
 		struct file_descriptor *child_fd = malloc (sizeof *child_fd);
 		if (child_fd == NULL) {
 			close_all_files (child);
 			return false;
 		}
-		lock_acquire (&filesys_lock);
-		struct file *duplicated_file = file_duplicate (parent_fd->file);
-		lock_release (&filesys_lock);
-		if (duplicated_file == NULL) {
-			free (child_fd);
-			close_all_files (child);
-			return false;
+
+		/* edward
+		CASE 01: not duplicated > duplicate a file from parent
+		CASE 02: already duplicated > find duplicated file with inode address
+		*/
+		struct file *duplicated_file;
+		if(!parent_fd->file) duplicated_file = parent_fd->file;
+		else if (!parent_fd->file->is_duplicated) {
+			lock_acquire (&filesys_lock);
+			duplicated_file = file_duplicate (parent_fd->file);
+			lock_release (&filesys_lock);
+			if (duplicated_file == NULL) {
+				free (child_fd);
+				close_all_files (child);
+				return false;
+			}
+			parent_fd->file->is_duplicated = true;
 		}
-		child_fd->fd = parent_fd->fd;
-		child_fd->file = duplicated_file;
-		list_push_back (&child->file_descriptors, &child_fd->elem);
+		else {
+			struct inode *identifier = parent_fd->file->inode;
+			for (struct list_elem *t = list_begin (&child->file_descriptors); t != list_end (&child->file_descriptors); t = list_next (t)) {
+				struct file_descriptor *desc = list_entry (t, struct file_descriptor, elem);
+				if (!desc->file) continue;
+				if (desc->file->inode == identifier) {
+					duplicated_file = desc->file;
+					break;
+				}
+			}
+		}
+
+		child_fd->file = duplicated_file; /* edward: link file to the descriptor */
+		child_fd->fd = parent_fd->fd; /* edward: copy the descriptor number */
+		child_fd->fd_kind = parent_fd->fd_kind;
+		list_push_back (&child->file_descriptors, &child_fd->elem); /* edward: enlist the descriptor */
 	}
 	child->next_fd = parent->next_fd;
 	return true;
@@ -468,9 +469,9 @@ dup2_handler (int oldfd, int newfd) {
 	desc_new->fd = newfd;
 	desc_new->fd_kind = desc_old->fd_kind;
 	desc_new->file = desc_old->file;
-	if (desc_new->fd_kind == FD_FILE && desc_new->file != NULL) desc_old->file->ref_cnt++;
-	else if(desc_new->fd_kind == FD_STDIN) thread_current()->stdin_cnt++;
-	else if(desc_new->fd_kind == FD_STDOUT) thread_current()->stdout_cnt++;
+	if (desc_new->fd_kind == FD_FILE && desc_new->file) desc_old->file->ref_cnt++;
+	else if(desc_new->fd_kind == FD_STDIN && !desc_new->file) thread_current()->stdin_cnt++;
+	else if(desc_new->fd_kind == FD_STDOUT && !desc_new->file) thread_current()->stdout_cnt++;
 	list_push_back (&thread_current ()->file_descriptors, &desc_new->elem);
 	return newfd;
 }

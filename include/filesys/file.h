@@ -12,6 +12,7 @@ struct file {
 	off_t pos;                  /* Current position. */
 	bool deny_write;            /* Has file_deny_write() been called? */
 	int ref_cnt;
+	bool is_duplicated;
 };
 
 /* Opening and closing files. */
