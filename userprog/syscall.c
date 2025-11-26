@@ -419,10 +419,11 @@ syscall_duplicate_fds (struct thread *parent, struct thread *child) {
 		}
 
 		/* edward
+		CASE 00: not a file (stdin/stdout)
 		CASE 01: not duplicated > duplicate a file from parent
 		CASE 02: already duplicated > find duplicated file with inode address
 		*/
-		struct file *duplicated_file;
+		struct file *duplicated_file = NULL;
 		if(!parent_fd->file) duplicated_file = parent_fd->file;
 		else if (!parent_fd->file->is_duplicated) {
 			lock_acquire (&filesys_lock);
@@ -442,7 +443,18 @@ syscall_duplicate_fds (struct thread *parent, struct thread *child) {
 				if (!desc->file) continue;
 				if (desc->file->inode == identifier) {
 					duplicated_file = desc->file;
+					if (duplicated_file) duplicated_file->ref_cnt++;
 					break;
+				}
+			}
+			if (duplicated_file == NULL) {
+				lock_acquire (&filesys_lock);
+				duplicated_file = file_duplicate (parent_fd->file);
+				lock_release (&filesys_lock);
+				if (duplicated_file == NULL) {
+					free (child_fd);
+					close_all_files (child);
+					return false;
 				}
 			}
 		}
