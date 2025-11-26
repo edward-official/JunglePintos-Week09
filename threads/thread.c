@@ -115,7 +115,7 @@ static int64_t mlfqs_ticks;
 
    It is not safe to call thread_current() until this function
    finishes. */
-/* 🔥 edward
+/* edward
 Opens the entire thread system.
 Runs the main thread.
 Initializing the variables for the system.
@@ -219,7 +219,7 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
 	ASSERT (function != NULL);
 
 	/* Allocate thread. */
-	t = palloc_get_page (PAL_ZERO); /* 🔥 edward: Thread gets page */
+	t = palloc_get_page (PAL_ZERO); /* edward: Thread gets page */
 	if (t == NULL)
 		return TID_ERROR;
 
@@ -255,7 +255,7 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
    This function must be called with interrupts turned off.  It
    is usually a better idea to use one of the synchronization
    primitives in synch.h. */
-/* 🔥 edward
+/* edward
 Blocks the current thread and reschedules
 */
 void
@@ -286,7 +286,7 @@ bool thread_cmp_priority_asc (const struct list_elem *a, const struct list_elem 
    be important: if the caller had disabled interrupts itself,
    it may expect that it can atomically unblock a thread and
    update other data. */
-/* 🔥 edward
+/* edward
 Unblock a given thread and put it in the ready list.
 */
 void
@@ -352,7 +352,7 @@ thread_exit (void) {
 
 /* Yields the CPU.  The current thread is not put to sleep and
    may be scheduled again immediately at the scheduler's whim. */
-/* 🔥 edward
+/* edward
 Current thread stops and one on the ready list takes over the place.
 */
 void
@@ -556,7 +556,7 @@ mlfqs_ready_threads (void) {
 	return n_ready_threads;
 }
 
-/* 🔥 edward
+/* edward
 Traverse the whole list and update the recent cpu value
 */
 static void
@@ -573,7 +573,7 @@ mlfqs_update_recent_cpu_all (void) {
 	}
 }
 
-/* 🔥 edward
+/* edward
 Traverse the whole list and update the priority
 */
 static void
@@ -586,7 +586,7 @@ mlfqs_update_priority_all (void) {
 	list_sort (&ready_list, thread_cmp_priority_desc, NULL);
 }
 
-/* 🔥 edward
+/* edward
 Update priority of a thread
 */
 static void
@@ -693,7 +693,7 @@ kernel_thread (thread_func *function, void *aux) {
 
 /* Does basic initialization of T as a blocked thread named
    NAME. */
-/* 🔥 edward
+/* edward
 Default status: THREAD_BLOCKED
 */
 static void
@@ -730,7 +730,10 @@ next_thread_to_run (void) {
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
-/* Use iretq to launch the thread */
+/*
+Use iretq to launch the thread
+edward: return from interrupt context to user context
+*/
 void
 do_iret (struct intr_frame *tf) {
 	__asm __volatile(
@@ -831,7 +834,7 @@ thread_launch (struct thread *th) {
  * This function modify current thread's status to status and then
  * finds another thread to run and switches to it.
  * It's not safe to call printf() in the schedule(). */
-/* 🔥 edward
+/* edward
 If the status is THREAD_DYING, for now just put it in the destruction_req.
 Removed using deferred destruction method.
 */
@@ -898,7 +901,7 @@ allocate_tid (void) {
 	return tid;
 }
 
-/* 🔥 edward
+/* edward
 Check if the current thread has to hand over the control to the first thread on the ready list.
 And if it has to, hand over.
 */

@@ -24,8 +24,8 @@ Executing 'bad-read':
 (bad-read) begin
 bad-read: exit(-1)
 Execution of 'bad-read' complete.
-Timer: 76 ticks
-Thread: 40 idle ticks, 32 kernel ticks, 4 user ticks
+Timer: 80 ticks
+Thread: 37 idle ticks, 41 kernel ticks, 2 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 85 reads, 266 writes
 hd1:0: 119 reads, 0 writes

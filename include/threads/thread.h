@@ -103,16 +103,17 @@ struct thread {
 	int original_priority;
 	struct lock *waiting_for;
 	struct list donators;
-	/* 🔥 edward
+	/* edward
 	list elements must be removed somewhere
 	- elem: schedule(through destruction_req using def)
 	- elem_for_donators: thread_remove_lock_donations
 	- elem_whole: thread_exit
 	*/
-	struct list_elem elem; /* 🔥 edward: ready_list + sleep_list + waiters (semaphore) */
+	struct list_elem elem; /* edward: ready_list + sleep_list + waiters (semaphore) */
 	struct list_elem elem_for_donators;
 	struct list_elem elem_whole;
 	int64_t wakeup_tick;
+	int stdin_cnt, stdout_cnt;
 	
 	#ifdef USERPROG
 	/* Owned by userprog/process.c. */

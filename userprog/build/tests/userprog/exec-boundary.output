@@ -11,7 +11,7 @@ Booting from Hard Disk..Kernel command line: -q -f put exec-boundary put child-s
 Pintos booting with: 
 	base_mem: 0x0 ~ 0x9fc00 (Usable: 639 kB)
 	ext_mem: 0x100000 ~ 0x13e0000 (Usable: 19,328 kB)
-Calibrating timer...  209,510,400 loops/s.
+Calibrating timer...  157,081,600 loops/s.
 hd0: unexpected interrupt
 hd0:0: detected 345 sector (172 kB) disk, model "QEMU HARDDISK", serial "QM00001"
 hd0:1: detected 20,160 sector (9 MB) disk, model "QEMU HARDDISK", serial "QM00002"
@@ -30,12 +30,12 @@ child-simple: exit(81)
 (exec-boundary) end
 exec-boundary: exit(0)
 Execution of 'exec-boundary' complete.
-Timer: 92 ticks
-Thread: 46 idle ticks, 36 kernel ticks, 10 user ticks
+Timer: 90 ticks
+Thread: 43 idle ticks, 38 kernel ticks, 9 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 163 reads, 518 writes
 hd1:0: 240 reads, 0 writes
-Console: 1075 characters output
+Console: 1074 characters output
 Keyboard: 0 keys pressed
 Exception: 0 page faults
 Powering off...

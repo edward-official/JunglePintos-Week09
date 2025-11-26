@@ -5,8 +5,7 @@ iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+0138B4A0+012CB4A0 CA00
 Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
 
 
-Booting from Hard Disk...
-Kernel command line: -q -f put bad-write2 run bad-write2
+Booting from Hard Disk..Kernel command line: -q -f put bad-write2 run bad-write2
 0 ~ 9fc00 1
 100000 ~ 13e0000 1
 Pintos booting with: 
@@ -25,8 +24,8 @@ Executing 'bad-write2':
 (bad-write2) begin
 bad-write2: exit(-1)
 Execution of 'bad-write2' complete.
-Timer: 75 ticks
-Thread: 35 idle ticks, 39 kernel ticks, 2 user ticks
+Timer: 88 ticks
+Thread: 43 idle ticks, 41 kernel ticks, 4 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 85 reads, 266 writes
 hd1:0: 119 reads, 0 writes

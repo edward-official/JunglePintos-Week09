@@ -5,8 +5,7 @@ iPXE (https://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+0138B4A0+012CB4A0 CA00
 Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
 
 
-Booting from Hard Disk...
-Kernel command line: -q -f put open-normal put sample.txt run open-normal
+Booting from Hard Disk..Kernel command line: -q -f put open-normal put sample.txt run open-normal
 0 ~ 9fc00 1
 100000 ~ 13e0000 1
 Pintos booting with: 
@@ -28,7 +27,7 @@ Executing 'open-normal':
 open-normal: exit(0)
 Execution of 'open-normal' complete.
 Timer: 82 ticks
-Thread: 36 idle ticks, 41 kernel ticks, 5 user ticks
+Thread: 43 idle ticks, 36 kernel ticks, 4 user ticks
 hd0:0: 0 reads, 0 writes
 hd0:1: 116 reads, 280 writes
 hd1:0: 121 reads, 0 writes

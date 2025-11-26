@@ -26,7 +26,10 @@ bytes_to_sectors (off_t size) {
 	return DIV_ROUND_UP (size, DISK_SECTOR_SIZE);
 }
 
-/* In-memory inode. */
+/*
+In-memory inode.
+edward: inode stands for index node.
+*/
 struct inode {
 	struct list_elem elem;              /* Element in inode list. */
 	disk_sector_t sector;               /* Sector number of disk location. */
@@ -89,7 +92,7 @@ inode_create (disk_sector_t sector, off_t length) {
 				for (i = 0; i < sectors; i++) 
 					disk_write (filesys_disk, disk_inode->start + i, zeros); 
 			}
-			success = true; 
+			success = true;
 		} 
 		free (disk_inode);
 	}

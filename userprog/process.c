@@ -42,6 +42,27 @@ struct initd_args {
 	struct wait_status *wait_status;
 };
 
+void
+init_fds (struct thread *target) {
+	if (!target->fds_initialized) {
+		list_init(&target->file_descriptors);
+		target->next_fd = 2;
+		target->fds_initialized = true;
+
+		struct file_descriptor *fd_stdin = malloc(sizeof(*fd_stdin));
+		fd_stdin->fd = 0;
+		fd_stdin->file = NULL;
+		fd_stdin->fd_kind = FD_STDIN;
+		list_push_back(&target->file_descriptors, &fd_stdin->elem);
+		
+		struct file_descriptor *fd_stdout = malloc(sizeof(*fd_stdout));
+		fd_stdout->fd = 1;
+		fd_stdout->file = NULL;
+		fd_stdout->fd_kind = FD_STDOUT;
+		list_push_back(&target->file_descriptors, &fd_stdout->elem);
+	}
+}
+
 /*
 General process initializer for initd and other process.
 edward: initialize struct of current thread
@@ -49,12 +70,11 @@ edward: initialize struct of current thread
 static void
 process_init (void) {
 	struct thread *current = thread_current ();
+	current->stdin_cnt = 1;
+	current->stdout_cnt = 1;
+
 #ifdef USERPROG
-	if (!current->fds_initialized) {
-		list_init(&current->file_descriptors);
-		current->next_fd = 2;
-		current->fds_initialized = true;
-	}
+	init_fds(current);
 	if (!current->children_initialized) {
 		list_init(&current->children);
 		current->children_initialized = true;
@@ -305,8 +325,11 @@ __do_fork (void *aux) {
 	if (!pml4_for_each (parent->pml4, duplicate_pte, parent)) goto error; /* edward: copy page table */
 #endif
 
+	/* 3. struct thread */
 	process_init ();
 	if (!syscall_duplicate_fds (parent, current)) goto error;
+	current->stdin_cnt = parent->stdin_cnt;
+	current->stdout_cnt = parent->stdout_cnt;
 	fs->success = true;
 	sema_up(&fs->semaphore); /* edward: wake parent up */
 	do_iret (&if_); /* Finally, switch to the newly created process. */
@@ -528,7 +551,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	if (file_name_copy == NULL) goto done;
 	strlcpy (file_name_copy, file_name, PGSIZE);
 
-	/* edward: parse the token TODO */
+	/* edward: parse the token */
 	for (token = strtok_r (file_name_copy, " ", &save_ptr); token != NULL; token = strtok_r (NULL, " ", &save_ptr)) {
 		if (argc >= MAX_ARGS) goto done;
 		argv[argc++] = token;
